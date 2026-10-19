@@ -45,12 +45,15 @@ test/unit/browser-diagnostics.test.ts:30	空值與非字串輸入回傳 redacted
 test/unit/browser-diagnostics.test.ts:48	無法解析的 URL 回傳 bounded 的 redacted 結果且不拋錯
 test/unit/browser-diagnostics.test.ts:61	query 值與敏感 token 永遠不會出現在輸出
 test/unit/browser-diagnostics.test.ts:72	過長的 host 與 path 依上限裁切
+test/unit/browser-diagnostics.test.ts:101	%s 分類為 %s
 test/unit/browser-diagnostics.test.ts:107	從單一 operation 物件抽出 operationName
 test/unit/browser-diagnostics.test.ts:119	從 batch 陣列抽出唯一 operationName 並忽略 variables 與 hashes
 test/unit/browser-diagnostics.test.ts:133	無效 JSON 回傳空陣列且不拋錯
 test/unit/browser-diagnostics.test.ts:140	非物件或非字串 operationName 一律忽略
 test/unit/browser-diagnostics.test.ts:146	超過數量上限時只保留前 N 個
 test/unit/browser-diagnostics.test.ts:157	過長 operationName 依上限裁切
+test/unit/browser-diagnostics.test.ts:221	%s / %s → %s
+test/unit/browser-diagnostics.test.ts:285	%s / %s / %s → %s
 test/unit/browser-diagnostics.test.ts:297	超過上限時裁切，未超過時原樣回傳
 test/unit/browser-manager.test.ts:328	以 headless、storageState 與設定 viewport 啟動，重複 start 不重建
 test/unit/browser-manager.test.ts:359	disableChat 設定為 false 時停用聊天封鎖
@@ -112,6 +115,8 @@ test/unit/channel-health-checker.test.ts:80	以單一 DOM snapshot 探測一般�
 test/unit/channel-health-checker.test.ts:100	保留 login、error、offline、content warning、live 的判斷優先序
 test/unit/channel-health-checker.test.ts:138	content warning 仍用 Locator 點擊並等待 live content
 test/unit/channel-health-checker.test.ts:161	content warning 無法點擊時回報 content_warning
+test/unit/channel-points-reader.test.ts:30	解析千分位 %s
+test/unit/channel-points-reader.test.ts:43	解析縮寫 %s
 test/unit/channel-points-reader.test.ts:49	依序檢查摘要候選值並只執行一次批次 DOM 讀取
 test/unit/channel-points-reader.test.ts:65	摘要不存在時回傳 not_found
 test/unit/channel-points-reader.test.ts:71	只存在隱藏摘要時視為 not_found
@@ -164,6 +169,7 @@ test/unit/channel-session.test.ts:1556	createChannelUrl 使用 URL encoding 並�
 test/unit/config.test.ts:31	載入合法 YAML 並將 snake_case 轉為 camelCase
 test/unit/config.test.ts:125	config.example.yml 是可直接複製使用的單檔設定範例
 test/unit/config.test.ts:152	載入自訂的頻道復原與 session 啟動冷卻設定
+test/unit/config.test.ts:223	%s 時拒絕設定
 test/unit/config.test.ts:234	resource_guard 門檻依 max_concurrent_streams 縮放（N=3 錨點）
 test/unit/config.test.ts:255	resource_guard.scale_with_streams 為 false 時使用絕對門檻
 test/unit/config.test.ts:276	resource_guard 門檻順序錯誤時拒絕設定
@@ -179,10 +185,20 @@ test/unit/config.test.ts:502	缺少的環境替換值會成為空字串並由欄
 test/unit/config.test.ts:514	只有 Client ID 與 Client Secret 時允許啟動設定
 test/unit/config.test.ts:529	拒絕不是 true 或 false 的 HEADLESS
 test/unit/config.test.ts:535	可由環境變數啟用 Telegram 並解析多個 chat ID
+test/unit/config.test.ts:558	Telegram %s 時拒絕設定
 test/unit/config.test.ts:564	可由環境變數啟用 Discord 並解析多個 channel ID
+test/unit/config.test.ts:630	Discord %s 時拒絕設定
+test/unit/config.test.ts:643	%s 時拋出 ConfigValidationError
+test/unit/config.test.ts:661	%s 時拒絕設定
+test/unit/config.test.ts:673	%s 不是物件時拒絕設定
+test/unit/config.test.ts:686	twitch_api.%s 時拒絕設定
+test/unit/config.test.ts:730	browser.%s 無效時拒絕設定
 test/unit/config.test.ts:736	設定檔不存在時拋出 ConfigFileNotFoundError
 test/unit/config.test.ts:747	YAML 語法錯誤時拋出 ConfigParseError
+test/unit/config.test.ts:757	拒絕格式錯誤的 YAML
 test/unit/config.test.ts:765	拒絕形成循環物件的 YAML alias
+test/unit/config.test.ts:796	%s 超過 Node timer 上限時拒絕設定
+test/unit/config.test.ts:806	%s 根節點走 ConfigValidationError
 test/unit/config.test.ts:813	任何 parse 或 validation error 都不包含 access token 原文
 test/unit/config.test.ts:841	回傳物件、陣列與巢狀設定皆不可變
 test/unit/container-restart-controller.test.ts:12	第一次 request 會 emit 一次事件、flush 後 exit(1)
@@ -195,6 +211,7 @@ test/unit/container-restart-controller.test.ts:156	onNotify 失敗仍會 flush �
 test/unit/credential.test.ts:25	找不到 storageState 時拋出可行動的專用錯誤
 test/unit/credential.test.ts:42	readFile 失敗時穩定區分不可讀，不依賴檔案權限或 root 身分
 test/unit/credential.test.ts:62	JSON 語法錯誤時拋出安全且可行動的專用錯誤
+test/unit/credential.test.ts:97	%s 時拋出格式錯誤
 test/unit/credential.test.ts:113	合法 storageState 回傳安全摘要並記錄 credential_checked
 test/unit/credential.test.ts:133	cookies 為空時警告但允許啟動
 test/unit/credential.test.ts:155	cookies 與 origins 可缺省，並將缺少 cookies 視為空值警告
@@ -384,9 +401,12 @@ test/unit/twitch-api.test.ts:469	拒絕超過一百萬 bytes 的 response body
 test/unit/twitch-api.test.ts:490	fetch AbortError 分類為 temporary aborted 錯誤
 test/unit/twitch-api.test.ts:505	網路錯誤分類為 temporary 且不轉送原始錯誤內容
 test/unit/twitch-api.test.ts:536	無法解析的 JSON 分類為 temporary invalid-response
+test/unit/twitch-api.test.ts:593	%s 時保守拒絕 response schema
 test/unit/watchdog-scheduler.test.ts:27	第一輪 live 輸出 online，後續不變不重複輸出，offline 時輸出轉換
 test/unit/watchdog-scheduler.test.ts:85	第一輪全部 offline 不輸出狀態噪音但仍 reconcile 空集合
 test/unit/watchdog-scheduler.test.ts:99	高優先序頻道上線時由 selector 與 reconcile 替換低優先序頻道
+test/unit/watchdog-scheduler.test.ts:144	%s API 失敗時保留既有 session，不 reconcile 空集合
+test/unit/watchdog-scheduler.test.ts:183	%s 失敗後於下一個正常 interval 重試
 test/unit/watchdog-scheduler.test.ts:218	rate-limit 視窗結束前 interval tick 會略過，到 retryAt 才重新請求
 test/unit/watchdog-scheduler.test.ts:266	runOnce 不重入，略過的呼叫立即 resolve
 test/unit/watchdog-scheduler.test.ts:290	API polling 完成後不等待 session reconcile

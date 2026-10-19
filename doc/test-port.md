@@ -4,6 +4,7 @@
 
 | 舊檔案 | 原測試 | 處置 | Rust 測試／理由 |
 | --- | --- | --- | --- |
+| test/unit/config.test.ts | %s 時拒絕設定 | 標題重複 | 同名 it.each 有兩組（config.test.ts:223 與 661）；移植時以同一標題標註、案例表分別照抄（DEC-010 補抓後才出現的重複） |
 | test/unit/default-browser.test.ts | maps common default browser identifiers | 保留 Node | test-node/default-browser.test.ts；登入工具維持 Node（D2） |
 | test/unit/default-browser.test.ts | marks Safari as unsupported for automation | 保留 Node | test-node/default-browser.test.ts；登入工具維持 Node（D2） |
 | test/unit/default-browser.test.ts | puts a supported default browser first in preference order | 保留 Node | test-node/default-browser.test.ts；登入工具維持 Node（D2） |

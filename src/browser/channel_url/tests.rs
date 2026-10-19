@@ -68,7 +68,7 @@ fn oversized_host_and_path_are_truncated_to_limits() {
 }
 
 #[test]
-// 原測試：https://www.twitch.tv/some_channel 分類為 twitch_document
+// 原測試：%s 分類為 %s
 fn classifies_www_twitch_tv_as_twitch_document() {
     assert_eq!(
         sanitize_browser_url(Some("https://www.twitch.tv/some_channel")).endpoint_category,
@@ -77,7 +77,7 @@ fn classifies_www_twitch_tv_as_twitch_document() {
 }
 
 #[test]
-// 原測試：https://m.twitch.tv/some_channel 分類為 twitch_document
+// 原測試：%s 分類為 %s
 fn classifies_m_twitch_tv_as_twitch_document() {
     assert_eq!(
         sanitize_browser_url(Some("https://m.twitch.tv/some_channel")).endpoint_category,
@@ -86,7 +86,7 @@ fn classifies_m_twitch_tv_as_twitch_document() {
 }
 
 #[test]
-// 原測試：https://static.twitchcdn.net/assets/main.js 分類為 twitch_javascript
+// 原測試：%s 分類為 %s
 fn classifies_static_twitchcdn_net_as_twitch_javascript() {
     assert_eq!(
         sanitize_browser_url(Some("https://static.twitchcdn.net/assets/main.js")).endpoint_category,
@@ -95,7 +95,7 @@ fn classifies_static_twitchcdn_net_as_twitch_javascript() {
 }
 
 #[test]
-// 原測試：https://webpack.static.twitchcdn.net/main.123.js 分類為 twitch_javascript
+// 原測試：%s 分類為 %s
 fn classifies_webpack_static_twitchcdn_net_as_twitch_javascript() {
     assert_eq!(
         sanitize_browser_url(Some("https://webpack.static.twitchcdn.net/main.123.js"))
@@ -105,7 +105,7 @@ fn classifies_webpack_static_twitchcdn_net_as_twitch_javascript() {
 }
 
 #[test]
-// 原測試：https://assets.twitch.tv/main.js 分類為 twitch_javascript
+// 原測試：%s 分類為 %s
 fn classifies_assets_twitch_tv_as_twitch_javascript() {
     assert_eq!(
         sanitize_browser_url(Some("https://assets.twitch.tv/main.js")).endpoint_category,
@@ -114,7 +114,7 @@ fn classifies_assets_twitch_tv_as_twitch_javascript() {
 }
 
 #[test]
-// 原測試：https://static-cdn.jtvnw.net/app.js 分類為 twitch_javascript
+// 原測試：%s 分類為 %s
 fn classifies_static_cdn_jtvnw_net_as_twitch_javascript() {
     assert_eq!(
         sanitize_browser_url(Some("https://static-cdn.jtvnw.net/app.js")).endpoint_category,
@@ -123,7 +123,7 @@ fn classifies_static_cdn_jtvnw_net_as_twitch_javascript() {
 }
 
 #[test]
-// 原測試：https://gql.twitch.tv/gql 分類為 twitch_graphql
+// 原測試：%s 分類為 %s
 fn classifies_gql_twitch_tv_as_twitch_graphql() {
     assert_eq!(
         sanitize_browser_url(Some("https://gql.twitch.tv/gql")).endpoint_category,
@@ -132,7 +132,7 @@ fn classifies_gql_twitch_tv_as_twitch_graphql() {
 }
 
 #[test]
-// 原測試：https://k.twitchcdn.net/kauth.js 分類為 twitch_anti_abuse
+// 原測試：%s 分類為 %s
 fn classifies_k_twitchcdn_net_as_twitch_anti_abuse() {
     assert_eq!(
         sanitize_browser_url(Some("https://k.twitchcdn.net/kauth.js")).endpoint_category,
@@ -141,7 +141,7 @@ fn classifies_k_twitchcdn_net_as_twitch_anti_abuse() {
 }
 
 #[test]
-// 原測試：https://api.twitch.tv/helix/streams 分類為 twitch_api
+// 原測試：%s 分類為 %s
 fn classifies_api_twitch_tv_as_twitch_api() {
     assert_eq!(
         sanitize_browser_url(Some("https://api.twitch.tv/helix/streams")).endpoint_category,
@@ -150,7 +150,7 @@ fn classifies_api_twitch_tv_as_twitch_api() {
 }
 
 #[test]
-// 原測試：https://video-weaver.atl01.hls.ttvnw.net/v1/playlist/segment.ts 分類為 twitch_media
+// 原測試：%s 分類為 %s
 fn classifies_hls_ttvnw_net_as_twitch_media() {
     assert_eq!(
         sanitize_browser_url(Some(
@@ -162,7 +162,7 @@ fn classifies_hls_ttvnw_net_as_twitch_media() {
 }
 
 #[test]
-// 原測試：https://passport.twitch.tv/auth 分類為 twitch_other
+// 原測試：%s 分類為 %s
 fn classifies_passport_twitch_tv_as_twitch_other() {
     assert_eq!(
         sanitize_browser_url(Some("https://passport.twitch.tv/auth")).endpoint_category,
@@ -171,7 +171,7 @@ fn classifies_passport_twitch_tv_as_twitch_other() {
 }
 
 #[test]
-// 原測試：https://example.com/analytics.js 分類為 third_party
+// 原測試：%s 分類為 %s
 fn classifies_example_com_as_third_party() {
     assert_eq!(
         sanitize_browser_url(Some("https://example.com/analytics.js")).endpoint_category,

@@ -7,8 +7,13 @@ out="${2:-doc/spec}"
 mkdir -p "${out}"
 
 # 每列：<檔案>:<行號><TAB><標題>（含 it.each／test.each）
-grep -rnoE "^\s*(it|test)(\.each\([^)]*\))?\(\s*['\"\`][^'\"\`]+" "${old}/test" --include=*.ts \
-  | sed -E "s#^${old}/##; s/:[[:space:]]*(it|test)(\.each\([^)]*\))?\([[:space:]]*['\"\`]/\t/" \
+# DEC-010：第二條 grep 補抓案例表跨行的 it.each（`])('標題'` 續行）。
+{
+  grep -rnoE "^\s*(it|test)(\.each\([^)]*\))?\(\s*['\"\`][^'\"\`]+" "${old}/test" --include=*.ts \
+    | sed -E "s/:[[:space:]]*(it|test)(\.each\([^)]*\))?\([[:space:]]*['\"\`]/\t/"
+  grep -rnoE "^\s*\]\)\(\s*['\"\`][^'\"\`]+" "${old}/test" --include=*.ts \
+    | sed -E "s/:[[:space:]]*\]\)\([[:space:]]*['\"\`]/\t/" || true
+} | sed -E "s#^${old}/##" \
   | LC_ALL=C sort -t: -k1,1 -k2,2n > "${out}/ts-test-titles.tsv"
 
 # logger.debug／info／warn／error('事件')、('層級', '事件')、event: '事件'，以及 Logger.ts 的 LOG_EVENTS

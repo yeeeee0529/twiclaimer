@@ -34,6 +34,34 @@
 - 理由：同時滿足可追溯性與 G2 的逐位元組比對。
 - 影響：S1.6 實作聊天室封鎖時要照此規則載入；S1.7 的 evaluate 函式同規則（其文字不出現在 seq 比對中，風險較低）。
 
+## DEC-005 `gen-config-golden.mjs` 的案例目錄必須傳絕對路徑
+
+- 日期：2026-10-19（步驟：S1.2）
+- 問題：`gen-config-golden.mjs` 在產生設定 golden 前會 `process.chdir(resolve(dir))`（讓 AppConfig 的相對路徑與案例目錄無關）；若 `dir` 傳相對路徑，chdir 之後自身的 `join(dir, …)` 會落在錯誤位置，`writeFileSync` 以 ENOENT 失敗。
+- 決定：不改工具（附錄檔案逐字保留），呼叫時一律傳絕對路徑：`node tools/ref/gen-config-golden.mjs "$REF" "$(pwd)/testdata/golden/config"`。
+- 理由：工具在沙箱以絕對路徑實測過；相對路徑是未涵蓋的使用方式。
+- 影響：S1.2 與日後補產 golden 的指令要記得加 `$(pwd)`；已在計畫指令之外的使用注意事項，寫入本檔供日後查閱。
+
+## DEC-006 `sanitizeBrowserUrl`／`joinSanitizedUrl` 的實際定義位置
+
+- 日期：2026-10-19（步驟：S2.5）
+- 問題：計畫 §4.2 將 `browser/channel-url.ts` 對應到 `browser/channel_url.rs`，但 `sanitizeBrowserUrl`／`joinSanitizedUrl` 實際定義在 `src/browser/browser-diagnostics.ts`；`channel-url.ts` 只有 `createChannelUrl` 等函式。
+- 決定：消毒函式照實際定義位置（`browser-diagnostics.ts`）移植到 `src/browser/channel_url.rs`（檔名照 §4.2 的對應表），並一併移植其依賴 `classifyHostname`。`EndpointCategory`、`SanitizedEndpoint` 設為 `pub(crate)` 供 S2.1 的 `browser-diagnostics` 純函式重用。
+- 理由：以舊版程式碼為行為依據（§0 順位 2），檔案位置照計畫的模組對應表。
+- 影響：S2.1 移植 `browser-diagnostics.ts` 其餘函式時直接引用，不重複定義。
+
+## DEC-007 launcher 的 macOS pipe 退路與 `dup2` 同 fd 邊界
+
+- 日期：2026-10-19（步驟：S1.3）
+- 問題：
+  1. nix 0.31.3 的 `unistd::pipe2` 在 macOS 被 cfg 排除（macOS libc 沒有 `pipe2`），規格文字（`pipe2(O_CLOEXEC)`）照字面寫在 macOS 編不過。
+  2. `--remote-debugging-pipe` 需要 `dup2` 到子程序 fd 3／4；當 pipe 的 fd 恰好已是 3（或 4）時，`dup2(3, 3)` 是 no-op 且**不會**清 `FD_CLOEXEC`，exec 後瀏覽器會讀不到指令。
+- 決定：
+  1. 新增 `create_cloexec_pipe()`：Linux 走 `pipe2(O_CLOEXEC)`（與規格一致）；macOS 退回 `pipe()` + `fcntl(F_SETFD, FD_CLOEXEC)`。macOS 有極小的競態窗口（pipe 建立到 fcntl 之間若 fork 會外洩 fd），僅影響本機開發，正式環境（Linux）不受影響。
+  2. `dup2_to_fixed_fd()` 在 oldfd == newfd 時改用 `fcntl(F_SETFD, 0)` 清旗標（async-signal-safe），其餘照常 `dup2`。
+- 理由：Docker 正式環境是 Linux，規格語意（O_CLOEXEC、fd 3/4 清 CLOEXEC）在 Linux 完全一致；macOS 只是開發便利。
+- 影響：G1／G8 的 e2e 在 Linux 驗證；macOS 上 `spawn_browser` 只保證編譯與 API 正確。Linux 分支本機無法執行，留待 Docker test stage。
+
 ## DEC-008 Connection 的寫入佇列、close 語意與瀏覽器 session 事件
 
 - 日期：2026-10-19（步驟：S1.3）
@@ -52,30 +80,13 @@
 - 理由：真實 log 輸入出現 `\` 緊接 `\r` 的機率極低；等 R10 的 log-schema 比對發生實際差異再處理。
 - 影響：A/B 比較（§10）若出現相關欄位差異，回來查此筆。
 
-## DEC-007 launcher 的 macOS pipe 退路與 `dup2` 同 fd 邊界
-
-- 日期：2026-10-19（步驟：S1.3）
-- 問題：
-  1. nix 0.31.3 的 `unistd::pipe2` 在 macOS 被 cfg 排除（macOS libc 沒有 `pipe2`），規格文字（`pipe2(O_CLOEXEC)`）照字面寫在 macOS 編不過。
-  2. `--remote-debugging-pipe` 需要 `dup2` 到子程序 fd 3／4；當 pipe 的 fd 恰好已是 3（或 4）時，`dup2(3, 3)` 是 no-op 且**不會**清 `FD_CLOEXEC`，exec 後瀏覽器會讀不到指令。
-- 決定：
-  1. 新增 `create_cloexec_pipe()`：Linux 走 `pipe2(O_CLOEXEC)`（與規格一致）；macOS 退回 `pipe()` + `fcntl(F_SETFD, FD_CLOEXEC)`。macOS 有極小的競態窗口（pipe 建立到 fcntl 之間若 fork 會外洩 fd），僅影響本機開發，正式環境（Linux）不受影響。
-  2. `dup2_to_fixed_fd()` 在 oldfd == newfd 時改用 `fcntl(F_SETFD, 0)` 清旗標（async-signal-safe），其餘照常 `dup2`。
-- 理由：Docker 正式環境是 Linux，規格語意（O_CLOEXEC、fd 3/4 清 CLOEXEC）在 Linux 完全一致；macOS 只是開發便利。
-- 影響：G1／G8 的 e2e 在 Linux 驗證；macOS 上 `spawn_browser` 只保證編譯與 API 正確。Linux 分支本機無法執行，留待 Docker test stage。
-
-## DEC-006 `sanitizeBrowserUrl`／`joinSanitizedUrl` 的實際定義位置
+## DEC-010 `extract-spec.sh` 補抓跨行的 `it.each` 標題
 
 - 日期：2026-10-19（步驟：S2.5）
-- 問題：計畫 §4.2 將 `browser/channel-url.ts` 對應到 `browser/channel_url.rs`，但 `sanitizeBrowserUrl`／`joinSanitizedUrl` 實際定義在 `src/browser/browser-diagnostics.ts`；`channel-url.ts` 只有 `createChannelUrl` 等函式。
-- 決定：消毒函式照實際定義位置（`browser-diagnostics.ts`）移植到 `src/browser/channel_url.rs`（檔名照 §4.2 的對應表），並一併移植其依賴 `classifyHostname`。`EndpointCategory`、`SanitizedEndpoint` 設為 `pub(crate)` 供 S2.1 的 `browser-diagnostics` 純函式重用。
-- 理由：以舊版程式碼為行為依據（§0 順位 2），檔案位置照計畫的模組對應表。
-- 影響：S2.1 移植 `browser-diagnostics.ts` 其餘函式時直接引用，不重複定義。
-
-## DEC-005 `gen-config-golden.mjs` 的案例目錄必須傳絕對路徑
-
-- 日期：2026-10-19（步驟：S1.2）
-- 問題：`gen-config-golden.mjs` 在產生設定 golden 前會 `process.chdir(resolve(dir))`（讓 AppConfig 的相對路徑與案例目錄無關）；若 `dir` 傳相對路徑，chdir 之後自身的 `join(dir, …)` 會落在錯誤位置，`writeFileSync` 以 ENOENT 失敗。
-- 決定：不改工具（附錄檔案逐字保留），呼叫時一律傳絕對路徑：`node tools/ref/gen-config-golden.mjs "$REF" "$(pwd)/testdata/golden/config"`。
-- 理由：工具在沙箱以絕對路徑實測過；相對路徑是未涵蓋的使用方式。
-- 影響：S1.2 與日後補產 golden 的指令要記得加 `$(pwd)`；已在計畫指令之外的使用注意事項，寫入本檔供日後查閱。
+- 問題：`test/unit/browser-diagnostics.test.ts:101` 的 endpoint 分類測試用 `it.each([...])('%s 分類為 %s', …)`，案例表跨行，單行的抽標題 regex（`.each\([^)]*\)\(\s*['"\`][^'"\`]+`）抓不到該標題；移植測試以 `// 原測試：<插值標題>` 標註時被 `port-coverage.sh` 判為未知標題（12 個）。
+- 決定：
+  1. `tools/ref/extract-spec.sh` 補一條 grep，抓 `it.each(…` 續行 `\])\('標題'` 的形式（`^\s*\]\)\(\s*['"\`][^'"\`]+`），併入 `ts-test-titles.tsv`。
+  2. 重新產生 TSV（列數因此與計畫的 397 不同，差異記於本筆）。
+  3. Rust 端 12 個分類測試的註解統一改為模板標題原文 `%s 分類為 %s`（一個 it.each 拆多個 Rust 測試，每個都標同一行，符合 §2.1）。
+- 理由：附錄工具的修改先記錄（§0）；TSV 應涵蓋所有舊測試標題，否則 port-coverage 的嚴格模式無法使用。
+- 影響：`ts-test-titles.tsv` 列數變更；port-coverage 的 known 集合擴大。若日後再發現其他多行形式，比照補抓。
