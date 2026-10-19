@@ -29,7 +29,7 @@
 | S1.8 | 未開始 | | | | |
 | S1 關卡 | 未開始 | | | | |
 | S2.1 | 進行中 | | 0.2 天 | 消毒層（13 測試）＋ Logger 本體（11 測試，層級過濾／JSON 行／時間格式／flush、LOG_EVENTS 對 log-events.txt 驗證）已完成並合併；strict port-coverage logging 11/11。尚缺：`browser-diagnostics` 純函式（12 個舊測試） | bedac14 |
-| S2.2 | 未開始 | | | | |
+| S2.2 | 進行中 | | 0.3 天 | `parse_yaml` 移植完成：JsValue 模型、core schema、alias 計數（99/100/101 分界）、循環 alias、BOM；**13/13 golden 全過**。尚缺：ConfigLoader、resource guard 門檻、`*.config.yml` golden、寫回（S2.3） | 4766885 |
 | S2.3 | 未開始 | | | | |
 | S2.4 | 未開始 | | | | |
 | S2.5 | 進行中 | | 0.1 天 | `channel_url.rs`（sanitize／join／分類）已移植＋18 個測試過（S2.5 其餘未開始）；實際定義位置的修正見 DEC-006 | 131098a |
