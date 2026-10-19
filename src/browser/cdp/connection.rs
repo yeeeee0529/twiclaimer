@@ -6,7 +6,10 @@
 //! [`Connection`] 在其上接讀寫 task——讀取迴圈把輸入端的位元組切成訊息交給
 //! [`Router::handle_message`]，依回傳的結果完成回應與事件派送；寫入迴圈把指令
 //! 編碼後寫到輸出端。
-// `Connection` 已完成：等 launcher 接線後移除。
+//!
+//! 以下 API 尚無正式呼叫端，等對應步驟接上後移除 allow：
+//! - `Connection::register_session`／`unregister_session`（S1.4，嵌套 auto-attach）。
+//! - `Router::dropped_diagnostics`（S1.6 的診斷計數）與 `Router::pending_count`（測試用）。
 #![allow(dead_code)]
 
 use std::collections::HashMap;
@@ -20,6 +23,10 @@ use super::transport::{self, MessageDecoder};
 
 /// 每個 session 的事件 channel 容量（§7.3.2：1024）。
 pub(crate) const EVENT_CHANNEL_CAPACITY: usize = 1024;
+
+/// `Browser.close` 用的固定指令 id（照 Playwright `crConnection.ts` 的
+/// `kBrowserCloseMessageId`）：這個 id 不登記等待者，回應（若有）也不會撞到其他指令。
+pub(crate) const BROWSER_CLOSE_MESSAGE_ID: i64 = -9999;
 
 /// attach／detach 通知 channel 的容量。
 pub(crate) const SESSION_NOTICE_CHANNEL_CAPACITY: usize = 64;
@@ -336,9 +343,15 @@ impl Connection {
     ///
     /// 輸入端／輸出端對應 `--remote-debugging-pipe` 的父程序端：輸入端讀瀏覽器的
     /// 回應與事件，輸出端寫指令。測試可用 `tokio::io::duplex` 的兩半
-    /// （`tokio::io::split` 後的讀寫兩半）代替。回傳連線與 attach／detach 通知的
-    /// 接收端（上層持有並消費）。
-    pub(crate) fn spawn<R, W>(reader: R, writer: W) -> (Self, mpsc::Receiver<SessionNotice>)
+    /// （`tokio::io::split` 後的讀寫兩半）代替。`on_read_end` 有值時，讀取 task 自然
+    /// 結束（pipe EOF、讀取錯誤或訊息過大）會送出訊號，供上層觸發 disconnected；
+    /// 連線被 [`Connection::close`]（abort 讀取 task）時不會送出。回傳連線與
+    /// attach／detach 通知的接收端（上層持有並消費）。
+    pub(crate) fn spawn<R, W>(
+        reader: R,
+        writer: W,
+        on_read_end: Option<oneshot::Sender<()>>,
+    ) -> (Self, mpsc::Receiver<SessionNotice>)
     where
         R: AsyncRead + Unpin + Send + 'static,
         W: AsyncWrite + Unpin + Send + 'static,
@@ -353,6 +366,7 @@ impl Connection {
             Arc::clone(&router),
             notices_tx,
             shutdown_rx,
+            on_read_end,
         ));
         let write_task = tokio::spawn(write_loop(writer, write_rx, Arc::clone(&router)));
         (
@@ -396,6 +410,20 @@ impl Connection {
         reply_rx
     }
 
+    /// 把一則指令直接排入寫入佇列，**不登記 Router 的等待者**（§7.3.1、DEC-008）。
+    ///
+    /// `close()` 的 `Browser.close` 用這個：Playwright 直接寫 pipe、不經協定層，
+    /// 因此不出現在 pw:protocol 紀錄；回應（若有）因沒有等待者而被忽略。連線已
+    /// 收尾（寫入 task 已結束）時訊息送不出去，呼叫端隨後等程序結束即可。
+    pub(crate) fn send_unguarded(&self, method: &str, params: serde_json::Value) {
+        let message = serde_json::json!({
+            "id": BROWSER_CLOSE_MESSAGE_ID,
+            "method": method,
+            "params": params,
+        });
+        let _ = self.write_tx.send(message.to_string());
+    }
+
     /// 登記一個子 session 並取得事件接收端。
     ///
     /// 給嵌套 auto-attach 用（S1.4）：頁面 session 底下的 worker／iframe 的
@@ -434,6 +462,7 @@ async fn read_loop<R: AsyncRead + Unpin>(
     router: Arc<Mutex<Router>>,
     notices: mpsc::Sender<SessionNotice>,
     mut shutdown: oneshot::Receiver<()>,
+    on_read_end: Option<oneshot::Sender<()>>,
 ) {
     let mut decoder = MessageDecoder::new();
     let mut buf = vec![0u8; 8192];
@@ -496,6 +525,11 @@ async fn read_loop<R: AsyncRead + Unpin>(
         }
     }
     router.lock().await.fail_all_pending();
+    // 讀取 task 自然結束（EOF／讀取錯誤／訊息過大）：通知上層觸發 disconnected。
+    // 被 Connection::close 以 abort 結束時走不到這裡，不會送出訊號。
+    if let Some(on_read_end) = on_read_end {
+        let _ = on_read_end.send(());
+    }
 }
 
 /// 寫入迴圈：從指令佇列收 JSON 文字、編碼、寫到輸出端。

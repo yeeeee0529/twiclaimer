@@ -2,8 +2,6 @@
 //! 每則訊息是一個 JSON 物件加 `\0`（§7.3.1）。
 //!
 //! 本檔只處理訊息框架（framing）；連線與 session 路由在 `connection.rs`，啟動在 `launcher.rs`。
-// S1.3 進行中：`connection.rs`／`launcher.rs` 接線後移除。
-#![allow(dead_code)]
 
 /// 解碼器：把讀到的位元組流切成 NUL 分隔的 JSON 訊息。
 ///
@@ -20,6 +18,9 @@ pub(crate) struct MessageDecoder {
 pub(crate) const MAX_MESSAGE_BYTES: usize = 64 * 1024 * 1024;
 
 /// 解碼錯誤。
+///
+/// 欄位只在測試中讀取（正式碼只把錯誤視為協定中斷）。
+#[allow(dead_code)]
 #[derive(Debug)]
 pub(crate) enum DecodeError {
     /// 累積的訊息超過 [`MAX_MESSAGE_BYTES`] 仍沒有出現 `\0`。
@@ -65,7 +66,8 @@ impl MessageDecoder {
         Ok(messages)
     }
 
-    /// 目前殘餘（尚未以 `\0` 結尾）的位元組數。
+    /// 目前殘餘（尚未以 `\0` 結尾）的位元組數（測試用）。
+    #[allow(dead_code)]
     pub(crate) fn buffered_len(&self) -> usize {
         self.buf.len()
     }

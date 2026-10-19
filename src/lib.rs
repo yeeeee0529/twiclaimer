@@ -3,3 +3,7 @@ pub mod browser;
 pub mod config;
 pub mod logging;
 pub mod scheduler;
+
+/// 跨模組整合測試與 e2e（計畫 §4.1）。
+#[cfg(test)]
+mod tests;

@@ -1,0 +1,5 @@
+//! 跨模組整合測試與需要 Chromium 的 e2e（計畫 §4.1）。
+//!
+//! 這裡放會 spawn 真實程序（假瀏覽器腳本或 headless shell）的測試；
+//! 純函式與本機可驗證的行為在各模組的 `tests.rs`。
+mod browser_launch;
