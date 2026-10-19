@@ -17,7 +17,6 @@
 //! - CDP trace 檔：`TWICLAIMER_CDP_TRACE`（§7.3.7），未設定時零額外成本。
 //!
 //! 以下 API 尚無正式呼叫端，等對應步驟接上後移除 allow：
-//! - `TraceWriter::record_send`／`record_recv`（S1.4，§7.3.7 的 SEND／RECV 紀錄）。
 //! - `BrowserTempDirs::artifacts` 的讀取（S1.4，`downloadPath`）。
 //! - `kill_all_registered`（§7.9，app 結束前的防線）。
 //! - `BrowserLauncher::launch_with`（測試注入假執行檔與較短逾時用）。
@@ -337,11 +336,22 @@ fn set_pdeathsig_in_child() -> io::Result<()> {
 }
 
 /// CDP trace 寫入器（§7.3.7）：`TWICLAIMER_CDP_TRACE` 有設定時寫檔，未設定時為 no-op。
+///
+/// 連線層（讀寫 task 與指令送出）與 launcher（`<launching>` 行）共用同一個
+/// 寫入器（[`SharedTrace`]），鎖內寫入以保持 SEND／RECV 的實際順序。
 pub(crate) enum TraceWriter {
     /// 未設定環境變數：不開檔、不寫入，零額外成本。
     Disabled,
     /// 寫入 trace 檔，每行立即 flush（格式與 Playwright 的 `DEBUG=pw:protocol` 相同）。
     File(std::fs::File),
+}
+
+/// 各端共用的 trace 寫入器（鎖保護；停用時鎖開銷可忽略）。
+pub(crate) type SharedTrace = Arc<std::sync::Mutex<TraceWriter>>;
+
+/// 依環境變數建立共用的 trace 寫入器。
+pub(crate) fn shared_trace_from_env() -> SharedTrace {
+    Arc::new(std::sync::Mutex::new(TraceWriter::from_env()))
 }
 
 impl TraceWriter {
@@ -521,18 +531,39 @@ pub(crate) struct LaunchedBrowser {
     pid: Option<u32>,
     /// `Browser.getVersion` 的版本（`browser.version()`）。
     version: String,
+    /// `Browser.getVersion` 的完整 userAgent（字型族表依平台選擇）。
+    user_agent: String,
     /// 收尾完成的訊號：`true` 表示程序已結束、暫存目錄已刪、registry 已解除。
     finalized: watch::Receiver<bool>,
     disconnected: Arc<DisconnectedState>,
     /// 暫存目錄路徑（實體由監看任務持有並在結束後刪除）。
     profile_path: PathBuf,
     artifacts_path: PathBuf,
+    /// close() 只送一次 `Browser.close` 的防重入旗標。
+    close_started: AtomicBool,
 }
 
 impl LaunchedBrowser {
     /// 瀏覽器版本（Playwright 的 `browser.version()`）。
     pub(crate) fn get_version(&self) -> &str {
         &self.version
+    }
+
+    /// `Browser.getVersion` 的完整 userAgent。
+    pub(crate) fn user_agent(&self) -> &str {
+        &self.user_agent
+    }
+
+    /// 依 userAgent 判斷平台（Playwright `FrameSession` 的 `_platform()`）：
+    /// Windows／Macintosh／其餘為 linux，供字型族表選擇。
+    pub(crate) fn platform(&self) -> &'static str {
+        if self.user_agent.contains("Windows") {
+            "win"
+        } else if self.user_agent.contains("Macintosh") {
+            "mac"
+        } else {
+            "linux"
+        }
     }
 
     /// 瀏覽器主程序的 pid（== process group id）。
@@ -577,19 +608,52 @@ impl LaunchedBrowser {
         }
     }
 
+    /// 登記一個子 session（嵌套 auto-attach），取得事件接收端（S1.4）。
+    pub(crate) async fn register_session(
+        &self,
+        session_id: &str,
+    ) -> mpsc::Receiver<super::connection::Event> {
+        self.connection.register_session(session_id).await
+    }
+
+    /// 結束一個子 session：未完成的指令全部失敗（S1.4）。
+    pub(crate) async fn unregister_session(&self, session_id: &str) {
+        let _ = self.connection.unregister_session(session_id).await;
+    }
+
+    /// 取走 attach／detach 通知接收端（[`super::context::BrowserAdapter`] 建構時呼叫一次；
+    /// 之後的通知由該監看任務消費）。
+    pub(crate) fn take_notices(&mut self) -> mpsc::Receiver<SessionNotice> {
+        let (dead_tx, dead_rx) = mpsc::channel(1);
+        drop(dead_tx); // 佔位接收端：取走後送進來的通知會被丟棄。
+        std::mem::replace(&mut self.notices, dead_rx)
+    }
+
     /// 關閉瀏覽器（§7.3.1）：直接寫出 `Browser.close`（不經 Router 的等待者，照
     /// Playwright 寫 pipe），等程序結束、暫存目錄刪除、registry 解除後返回。
     ///
-    /// 不設逾時——逾時由呼叫端負責；future 被取消時由 [`Drop`] 對整個 process group
-    /// 送 `SIGKILL`，背景收屍。
-    pub(crate) async fn close(mut self) {
+    /// 不設逾時——逾時由呼叫端負責；把手被 drop（含未來的呼叫端逾時取消）時由
+    /// [`Drop`] 對整個 process group 送 `SIGKILL`，背景收屍。
+    pub(crate) async fn close(&self) {
+        // 只送一次（重複 close 是 no-op，照 Playwright）。
+        if self.close_started.swap(true, Ordering::SeqCst) {
+            self.wait_finalized().await;
+            return;
+        }
         // 程序還在（連線還活著）才寫；連線已斷時寫入也會失敗，只是噪音。
         if !self.disconnected.is_disconnected() {
             self.connection.send_unguarded("Browser.close", json!({}));
         }
-        // 等監看任務收尾完成。連線已斷（EOF）時讀寫 task 已自然收尾。
-        while !*self.finalized.borrow_and_update() {
-            if self.finalized.changed().await.is_err() {
+        self.wait_finalized().await;
+    }
+
+    /// 等監看任務的收尾完成訊號。
+    async fn wait_finalized(&self) {
+        // clone 出自有權的接收端（`changed()` 需要 `&mut`），等監看任務收尾完成。
+        // 連線已斷（EOF）時讀寫 task 已自然收尾。
+        let mut finalized = self.finalized.clone();
+        while !*finalized.borrow_and_update() {
+            if finalized.changed().await.is_err() {
                 // 監看任務已消失（不該發生）：不再等，drop 時仍會 killpg 兜底。
                 break;
             }
@@ -639,11 +703,14 @@ impl BrowserLauncher {
 
     /// 啟動的一次嘗試：暫存目錄、spawn、接線與握手。
     async fn launch_attempt(&self, executable: PathBuf) -> Result<LaunchedBrowser, LaunchError> {
-        // trace 的第一行要在啟動時最先寫（§7.3.7；SEND／RECV 紀錄 S1.4 接上）。
-        let mut trace = TraceWriter::from_env();
+        // trace 的第一行要在啟動時最先寫（§7.3.7；SEND／RECV 紀錄由 Connection 接手）。
+        let trace = shared_trace_from_env();
         let temp_dirs = create_temp_dirs()?;
         let args = compose_browser_args(CHROMIUM_ARGS, temp_dirs.profile.path());
-        trace.write_launching(&executable, &args);
+        trace
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .write_launching(&executable, &args);
 
         let spawned = spawn_browser(&executable, &args)?;
         let pid = spawned.child.id();
@@ -656,10 +723,12 @@ impl BrowserLauncher {
 
         // 連線接線：讀瀏覽器的回應與事件、寫指令（§7.3.1 的兩條 pipe）。
         let (read_end_tx, read_end_rx) = oneshot::channel();
+        let trace = shared_trace_from_env();
         let (connection, notices) = Connection::spawn(
             spawned.response_receiver,
             spawned.command_sender,
             Some(read_end_tx),
+            Arc::clone(&trace),
         );
         // pipe EOF／讀取錯誤時：連線結束——整群 SIGKILL（群組多半已死；讀取錯誤時
         // 瀏覽器可能還活著，不能留下孤兒），收屍與暫存目錄刪除由監看任務完成，
@@ -698,6 +767,11 @@ impl BrowserLauncher {
                     "browserType.launch: Browser.getVersion response is missing 'product'",
                 )
             })?;
+        let user_agent = version_value
+            .get("userAgent")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string();
         let auto_attach_reply = connection
             .send_command(
                 None,
@@ -714,10 +788,12 @@ impl BrowserLauncher {
             pgid,
             pid,
             version: parse_browser_version(product),
+            user_agent,
             finalized,
             disconnected,
             profile_path,
             artifacts_path,
+            close_started: AtomicBool::new(false),
         })
     }
 }
