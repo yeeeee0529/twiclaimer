@@ -1,6 +1,7 @@
 # 進度
 
-- 目前步驟：S1.4（worktree `wt/s14-context`，子代理進行中）＋ S2.2 後半／S2.1 剩餘／S2.5 剩餘／S2.3（三個 worktree 子代理並行）
+- 目前步驟：S1.4（worktree `wt/s14-context`，子代理進行中）＋ S2.3 寫回（worktree `wt/s23-writeback`）＋ DEC-013 統一 refactor（主樹，子代理進行中）
+- 觀察到的既有不穩定：`tests::browser_launch::cancelling_close_kills_a_browser_that_ignores_browser_close`（S1.3 假瀏覽器測試，非 ignore）在全套平行跑時失敗過一次（process group 收屍時序），單跑與後續全跑皆通過；持續觀察，若再現就檢查收屍等待的確定性
 - 卡住的項目：無
 
 ## 階段
@@ -29,7 +30,7 @@
 | S1.8 | 未開始 | | | | |
 | S1 關卡 | 未開始 | | | | |
 | S2.1 | 完成 | 2026-10-19 | 0.3 天 | 消毒層（13）＋ Logger 本體（11）＋ `browser-diagnostics` 純函式（`extract_graph_ql_operation_names`／`decide_*_level`／`truncate_text`，10 個舊測試；另 6 個已由 channel_url 處置）＋ `safe_logging.rs`（舊碼無專屬測試，補測 3 個）。port-coverage strict 35/35。本步驟全部完成 | 5213e0a |
-| S2.2 | 進行中 | | 0.3 天 | `parse_yaml` 移植完成：JsValue 模型、core schema、alias 計數（99/100/101 分界）、循環 alias、BOM；**13/13 golden 全過**。尚缺：ConfigLoader、resource guard 門檻、`*.config.yml` golden、寫回（S2.3） | 4766885 |
+| S2.2 | 完成 | 2026-10-19 | 0.5 天 | `parse_yaml`（13/13 golden）＋`ConfigLoader`（欄位驗證順序／訊息、`${VAR}`、15 個 env 覆寫、X1 browser.engine、X2 headless）＋`model.rs`（f64 忠實 JS number、`to_json()`）＋thresholds（5）＋**9/9 config golden**（fingerprint 留 S2.6）。config.test.ts 24＋11 it.each＋thresholds 5 全移植（X2 檢查放 buildConfig 最後以守住原驗證順序）。寫回屬 S2.3 | 0ead197 |
 | S2.3 | 未開始 | | | | |
 | S2.4 | 未開始 | | | | |
 | S2.5 | 完成 | 2026-10-19 | 0.3 天 | `channel_url.rs`（18）＋選台器（16）＋復原政策（7/7）＋resource guard 政策（12/12）＋safe-logging 補測（3）全部完成；port-coverage strict 全過。config 形狀的型別（BrowserRecoveryConfig／ResourceGuardPolicyConfig 等）暫在使用端定義，等 S2.2 loader 合併後統一 | 5213e0a |
