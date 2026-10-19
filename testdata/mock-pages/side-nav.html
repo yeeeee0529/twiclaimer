@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Mock expanded side navigation</title>
+    <style>
+      nav { width: 240px; }
+      nav[data-collapsed="true"] { width: 50px; }
+    </style>
+  </head>
+  <body>
+    <nav data-a-target="side-nav-bar" data-collapsed="false">
+      <span>For You</span>
+      <button
+        type="button"
+        data-a-target="side-nav-arrow"
+        aria-expanded="true"
+        aria-label="Collapse Side Nav"
+      >Collapse</button>
+    </nav>
+    <script>
+      const nav = document.querySelector('[data-a-target="side-nav-bar"]');
+      const button = document.querySelector('[data-a-target="side-nav-arrow"]');
+      button.addEventListener('click', () => {
+        nav.dataset.collapsed = 'true';
+        button.setAttribute('aria-expanded', 'false');
+        button.setAttribute('aria-label', 'Expand Side Nav');
+      });
+    </script>
+  </body>
+</html>

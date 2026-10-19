@@ -1,0 +1,22 @@
+{
+  "cookies": [
+    {
+      "name": "auth-token",
+      "value": "fake-token",
+      "domain": ".twitch.tv",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "https://www.twitch.tv",
+      "localStorage": [
+        { "name": "fake-key", "value": "fake-value" }
+      ]
+    }
+  ]
+}

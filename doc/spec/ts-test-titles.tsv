@@ -1,0 +1,397 @@
+test/e2e/browser-diagnostics.spec.ts:19	page adapter 將失敗請求、非成功回應與 console 轉為消毒後的診斷
+test/e2e/browser-diagnostics.spec.ts:79	BrowserManager 以 channel 與 generation 記錄消毒後的診斷
+test/e2e/channel-points-reader.spec.ts:17	從真實 community points DOM 讀取千分位餘額
+test/e2e/channel-points-reader.spec.ts:27	支援本地化縮寫
+test/e2e/channel-points-reader.spec.ts:42	community points summary 不存在時回傳 not_found
+test/e2e/channel-points-reader.spec.ts:53	summary 存在但無數值時回傳 parse_failed
+test/e2e/channel-session.spec.ts:16	展開的 Twitch 左側欄會自動收合
+test/e2e/channel-session.spec.ts:28	live 頁面判定 healthy
+test/e2e/channel-session.spec.ts:38	content-warning 頁面會確認後判定 healthy
+test/e2e/channel-session.spec.ts:51	login-required 頁面回報 login_required
+test/e2e/channel-session.spec.ts:61	error 頁面回報 error_page
+test/e2e/channel-session.spec.ts:71	offline 頁面回報 offline
+test/e2e/chat-blocking.spec.ts:8	chat WebSocket is replaced by a silent fake socket
+test/e2e/chat-blocking.spec.ts:32	non-chat WebSocket URLs use the real constructor
+test/e2e/playback-optimizer.spec.ts:5	播放器優化器會靜音並選擇最低可用畫質
+test/e2e/reward-claimer.spec.ts:15	primary selector 不依賴按鈕文字
+test/e2e/reward-claimer.spec.ts:31	primary selector 缺少時使用 summary 結構 fallback
+test/e2e/reward-claimer.spec.ts:52	支援 BetterTTV 使用的 claimable bonus selector
+test/e2e/reward-claimer.spec.ts:74	disabled 按鈕不會被點擊
+test/e2e/reward-claimer.spec.ts:89	按鈕不存在時回傳 not_found
+test/e2e/reward-claimer.spec.ts:100	餘額選單按鈕不會被誤判為領取按鈕
+test/e2e/reward-claimer.spec.ts:127	真實 locator 一般點擊失敗時使用 DOM click fallback
+test/e2e/reward-claimer.spec.ts:148	成功後同一 channel 套用 60 秒冷卻
+test/e2e/reward-claimer.spec.ts:175	hasClaimableBonus 在領取按鈕存在時回傳 true
+test/e2e/reward-claimer.spec.ts:183	hasClaimableBonus 在沒有領取按鈕時回傳 false
+test/integration/browser-invalidation.test.ts:30	單一頻道 page crash 只延後該頻道，不影響其他 session 或重啟 browser
+test/integration/startup-prerequisites.test.ts:30	從暫存設定載入 env 憑證與 storageState，僅記錄安全摘要
+test/integration/startup-prerequisites.test.ts:82	設定可載入但 storageState 不存在時阻止啟動前置驗證
+test/integration/watchdog-flow.test.ts:23	建立部分 live sessions、替換低優先序頻道，暫時 API 失敗時保留
+test/unit/app-runner.test.ts:207	依 Config、Logger、Credential、Runtime、Browser、Scheduler 順序啟動
+test/unit/app-runner.test.ts:254	runtime 提供 startupDiagnostics 時以 provider 結果發出 service_started
+test/unit/app-runner.test.ts:284	startupDiagnostics 拋錯時改用預設 diagnostics 並記錄警告
+test/unit/app-runner.test.ts:308	設定失敗時不建立 logger、驗證 credential 或 runtime
+test/unit/app-runner.test.ts:327	credential 失敗時不建立或啟動 runtime
+test/unit/app-runner.test.ts:348	Browser 啟動失敗時清理完整 runtime，且不啟動 Scheduler
+test/unit/app-runner.test.ts:371	停止順序為 Scheduler、SessionManager、Browser、logger flush
+test/unit/app-runner.test.ts:386	整合元件在 Browser 後、Scheduler 前啟動，並於 Browser 後停止
+test/unit/app-runner.test.ts:423	並發及重複 stop 只釋放一次資源
+test/unit/app-runner.test.ts:441	啟動後收到 signal 會觸發優雅停止
+test/unit/app-runner.test.ts:468	啟動錯誤日誌不洩漏 token 或 storageState 路徑
+test/unit/app-runner.test.ts:485	未處理 rejection 設定 exitCode、記錄安全錯誤並停止服務
+test/unit/app-runner.test.ts:514	預設 RuntimeFactory 可完成建構且不會呼叫 Twitch
+test/unit/browser-diagnostics.test.ts:18	移除 query、fragment、credentials 與 port
+test/unit/browser-diagnostics.test.ts:30	空值與非字串輸入回傳 redacted placeholder
+test/unit/browser-diagnostics.test.ts:48	無法解析的 URL 回傳 bounded 的 redacted 結果且不拋錯
+test/unit/browser-diagnostics.test.ts:61	query 值與敏感 token 永遠不會出現在輸出
+test/unit/browser-diagnostics.test.ts:72	過長的 host 與 path 依上限裁切
+test/unit/browser-diagnostics.test.ts:107	從單一 operation 物件抽出 operationName
+test/unit/browser-diagnostics.test.ts:119	從 batch 陣列抽出唯一 operationName 並忽略 variables 與 hashes
+test/unit/browser-diagnostics.test.ts:133	無效 JSON 回傳空陣列且不拋錯
+test/unit/browser-diagnostics.test.ts:140	非物件或非字串 operationName 一律忽略
+test/unit/browser-diagnostics.test.ts:146	超過數量上限時只保留前 N 個
+test/unit/browser-diagnostics.test.ts:157	過長 operationName 依上限裁切
+test/unit/browser-diagnostics.test.ts:297	超過上限時裁切，未超過時原樣回傳
+test/unit/browser-manager.test.ts:328	以 headless、storageState 與設定 viewport 啟動，重複 start 不重建
+test/unit/browser-manager.test.ts:359	disableChat 設定為 false 時停用聊天封鎖
+test/unit/browser-manager.test.ts:373	context 建立失敗時關閉 browser，之後可重新 start
+test/unit/browser-manager.test.ts:391	未 start 時拒絕 createPage
+test/unit/browser-manager.test.ts:401	同一 channel 重複 createPage 回傳既有 page
+test/unit/browser-manager.test.ts:419	createPage 失敗不殘留 registry，下一次可重試
+test/unit/browser-manager.test.ts:439	closePage 可重複呼叫且正常關閉不通知 invalidation
+test/unit/browser-manager.test.ts:461	closePage 失敗時改為 full browser recycle，不在同 context 偷偷換 page
+test/unit/browser-manager.test.ts:494	stop 關閉 pages、context、browser，併發與重複 stop 皆安全
+test/unit/browser-manager.test.ts:515	stop 即使部分 close 失敗仍繼續清理其餘資源
+test/unit/browser-manager.test.ts:538	併發 manual restart 合併為一次並通知既有 channel 失效
+test/unit/browser-manager.test.ts:573	manual restart 啟動失敗時仍完成舊資源清理與失效通知
+test/unit/browser-manager.test.ts:601	page crash 移除 registry、清理 page 並只通知一次
+test/unit/browser-manager.test.ts:628	同一 normalized channel 重複 crash 不會 recycle browser
+test/unit/browser-manager.test.ts:657	15 秒內兩個不同 channel crash 只觸發同 generation 一次 recycle
+test/unit/browser-manager.test.ts:706	超出 multi-channel crash window 的不同 channel 不會 recycle
+test/unit/browser-manager.test.ts:736	非預期 page close 通知失效且可重建相同 channel
+test/unit/browser-manager.test.ts:762	頁面 popup 立即關閉且不加入 channel registry
+test/unit/browser-manager.test.ts:789	browser disconnect 通知全部 channel，並以 single-flight 退避重啟
+test/unit/browser-manager.test.ts:835	page close 先清除 registry 時 disconnect 仍回報 generation snapshot
+test/unit/browser-manager.test.ts:867	restartOnCrash=false 時只清理與通知，不自動重啟
+test/unit/browser-manager.test.ts:891	自動重啟退避期間 stop 會取消後續復原
+test/unit/browser-manager.test.ts:915	新的 browser crash 會取代仍在等待的過期復原排程
+test/unit/browser-manager.test.ts:956	自動重啟失敗只嘗試一次，且不洩漏 storageState path
+test/unit/browser-manager.test.ts:990	自動重啟第一次失敗後以遞增退避再次嘗試
+test/unit/browser-manager.test.ts:1026	快速連續 browser crash 達上限後停止自動重啟
+test/unit/browser-manager.test.ts:1074	invalidation observer 拋錯不阻塞 page 清理與重建
+test/unit/browser-manager.test.ts:1105	page close 卡住時會 timeout 並排程 full browser recycle，不可同 context 重建
+test/unit/browser-manager.test.ts:1168	browser close 無法確認終止時不 launch 替換 browser 並要求 fatal recovery
+test/unit/browser-manager.test.ts:1200	自動重啟次數耗盡時要求 container restart
+test/unit/browser-manager.test.ts:1249	短時間多次 unexpected browser disconnect 會以 crash-loop 要求 container restart
+test/unit/browser-manager.test.ts:1299	同一 channel 重複導覽逾時只記錄 per-channel diagnostic
+test/unit/browser-manager.test.ts:1337	成功導覽與後續 timeout 都不會建立 browser-level breaker
+test/unit/browser-manager.test.ts:1363	不同 channel 的導覽逾時也不會回收 browser
+test/unit/browser-manager.test.ts:1388	不同時間的導覽逾時不會累積 browser-level recovery
+test/unit/browser-manager.test.ts:1409	回收後忽略舊 recovery epoch 排隊中的 navigation outcome
+test/unit/browser-manager.test.ts:1438	大量 navigation timeout 不會要求 container restart
+test/unit/browser-manager.test.ts:1470	createPage 進行中呼叫 stop 時會等待建立完成後再清理
+test/unit/browser-manager.test.ts:1493	request failed 記錄含 channel 與 generation 的消毒後端點資訊
+test/unit/browser-manager.test.ts:1527	GraphQL request failed 記錄 operationName 但不記錄 body
+test/unit/browser-manager.test.ts:1560	third_party request failed 以 debug 記錄
+test/unit/browser-manager.test.ts:1593	twitch_media ERR_ABORTED request failed 以 debug 記錄
+test/unit/browser-manager.test.ts:1623	5xx 回應以 warn 記錄
+test/unit/browser-manager.test.ts:1653	4xx document 回應以 warn 記錄
+test/unit/browser-manager.test.ts:1682	非相關的 4xx 與成功的 media/圖片不記錄
+test/unit/browser-manager.test.ts:1712	成功的 Twitch bootstrap 回應以 debug 記錄
+test/unit/browser-manager.test.ts:1743	console error 對應 warn、warning 對應 debug、log 不記錄
+test/unit/browser-manager.test.ts:1800	third_party 來源的 console error 與已知噪音 pattern 以 debug 記錄
+test/unit/browser-manager.test.ts:1844	closePage 與 stop 會移除全部 diagnostics listener
+test/unit/cgroup-v2-reader.test.ts:26	policy snapshot 只讀三個 guard counter，full snapshot 才讀完整欄位
+test/unit/cgroup-v2-reader.test.ts:85	從 cgroup 根目錄讀取 cpu/memory/swap/pids/events
+test/unit/cgroup-v2-reader.test.ts:133	cpu.stat 缺少或 usage_usec 格式錯誤時視為不可用
+test/unit/cgroup-v2-reader.test.ts:145	memory.max 為 max 時視為不可用
+test/unit/cgroup-v2-reader.test.ts:159	缺少 memory.current 時標記為不可用
+test/unit/cgroup-v2-reader.test.ts:170	可透過 mountinfo + /proc/self/cgroup 解析命名空間路徑
+test/unit/cgroup-v2-reader.test.ts:206	memory.current 格式錯誤時拋出讀取錯誤
+test/unit/channel-health-checker.test.ts:80	以單一 DOM snapshot 探測一般健康狀態
+test/unit/channel-health-checker.test.ts:100	保留 login、error、offline、content warning、live 的判斷優先序
+test/unit/channel-health-checker.test.ts:138	content warning 仍用 Locator 點擊並等待 live content
+test/unit/channel-health-checker.test.ts:161	content warning 無法點擊時回報 content_warning
+test/unit/channel-points-reader.test.ts:49	依序檢查摘要候選值並只執行一次批次 DOM 讀取
+test/unit/channel-points-reader.test.ts:65	摘要不存在時回傳 not_found
+test/unit/channel-points-reader.test.ts:71	只存在隱藏摘要時視為 not_found
+test/unit/channel-points-reader.test.ts:87	摘要存在但沒有可解析數字時回傳 parse_failed
+test/unit/channel-points-reader.test.ts:93	DOM 批次讀取失敗時不向外拋出錯誤
+test/unit/channel-recovery-policy.test.ts:25	前三次單頻道 crash 依序產生 30、60、120 秒 backoff
+test/unit/channel-recovery-policy.test.ts:52	十分鐘視窗內第四次 crash 進入十五分鐘 quarantine
+test/unit/channel-recovery-policy.test.ts:73	quarantine 到期後只允許一個 probe 並以 generation 排除過期結果
+test/unit/channel-recovery-policy.test.ts:94	持續穩定三十分鐘後才重設 failure state
+test/unit/channel-recovery-policy.test.ts:123	穩定期屆滿後的下一次 crash 會視為第一次
+test/unit/channel-recovery-policy.test.ts:142	start failure 依序使用 30、60、120 秒後以十五分鐘為上限
+test/unit/channel-recovery-policy.test.ts:152	狀態 key 不區分大小寫，只有移除設定頻道時完全清除
+test/unit/channel-session.test.ts:401	併發 start 只建立一次 page、設定 timeout 並導覽編碼後 URL
+test/unit/channel-session.test.ts:432	start 失敗會透過 manager 清理 page 並進入 failed
+test/unit/channel-session.test.ts:451	取消進行中的 start 會 abort 底層 goto、關閉 page 並阻止 late success
+test/unit/channel-session.test.ts:478	start 被取消時即使 goto 永不返回，abort 也會讓 start 立即結束且不留下 orphan page
+test/unit/channel-session.test.ts:511	start 導向非預期 origin 時立即關閉 page 且不啟動 session
+test/unit/channel-session.test.ts:529	stop 可重複呼叫、關閉 page 並記錄停止原因
+test/unit/channel-session.test.ts:556	正常 Twitch URL 且有播放器時為 healthy
+test/unit/channel-session.test.ts:598	start 遇到 Twitch 內容警示時會先按 Start Watching 再進入 watching
+test/unit/channel-session.test.ts:626	start 與 reload 後會自動收合展開的 Twitch 左側欄
+test/unit/channel-session.test.ts:659	觀看中可直接從現有 page 擷取 viewport PNG
+test/unit/channel-session.test.ts:684	captureScreenshot 會排在既有 page operation 後方
+test/unit/channel-session.test.ts:716	觀看中可讀取忠誠點數，停止後回報 page_unavailable
+test/unit/channel-session.test.ts:749	讀取失敗且無可領取 bonus 時回傳原結果且不領取
+test/unit/channel-session.test.ts:771	hasClaimableBonus 檢查拋錯時視為不可領取
+test/unit/channel-session.test.ts:793	被 bonus 蓋住時先領取再重讀回傳餘額
+test/unit/channel-session.test.ts:830	領取後重讀仍失敗時回傳最後一次 unavailable
+test/unit/channel-session.test.ts:858	claim 拋錯時仍嘗試重讀餘額
+test/unit/channel-session.test.ts:908	健康檢查遇到可確認的 Twitch 內容警示時會按掉並回到 healthy
+test/unit/channel-session.test.ts:930	健康檢查遇到無法確認的 Twitch 內容警示時回報 content_warning
+test/unit/channel-session.test.ts:945	URL mismatch 與 page closed 回傳明確原因
+test/unit/channel-session.test.ts:964	第一次失敗 reload 並 recovering，下一次健康才恢復 watching
+test/unit/channel-session.test.ts:993	連續三次失敗後停止 timers、關閉 page 並進入 failed
+test/unit/channel-session.test.ts:1026	reward click_failed 只回報結果，不停止 session
+test/unit/channel-session.test.ts:1052	reward 連續失敗滿門檻時重整該頻道頁面
+test/unit/channel-session.test.ts:1111	reward 重整後再次連續失敗會要求容器重啟
+test/unit/channel-session.test.ts:1162	reward 失敗後成功或 not_found 會重置復原狀態
+test/unit/channel-session.test.ts:1222	獎勵操作前 URL 已偏離目標時不呼叫 RewardClaimer
+test/unit/channel-session.test.ts:1246	timer 工作不重入，且同一頁面的維護操作依序執行
+test/unit/channel-session.test.ts:1300	依設定定時刷新頁面並在 reload 後維持 watching
+test/unit/channel-session.test.ts:1350	重整後遇到 Twitch 內容警示時會重新按 Start Watching
+test/unit/channel-session.test.ts:1373	page_refresh_interval_seconds 為 0 時不排程定時刷新
+test/unit/channel-session.test.ts:1399	refreshNow 會手動重整頁面並送出 manual_refresh 事件
+test/unit/channel-session.test.ts:1431	stop 會 abort 進行中的 reload 並快速完成清理
+test/unit/channel-session.test.ts:1466	stop 等待無法 abort 的 page operation 超時後會強制關閉 page
+test/unit/channel-session.test.ts:1503	RewardClaimer 拋錯時轉為 click_failed 且避免 timer rejection
+test/unit/channel-session.test.ts:1537	只接受設定模組已驗證且存在於 channels 的名稱
+test/unit/channel-session.test.ts:1556	createChannelUrl 使用 URL encoding 並拒絕不合法 channel
+test/unit/config.test.ts:31	載入合法 YAML 並將 snake_case 轉為 camelCase
+test/unit/config.test.ts:125	config.example.yml 是可直接複製使用的單檔設定範例
+test/unit/config.test.ts:152	載入自訂的頻道復原與 session 啟動冷卻設定
+test/unit/config.test.ts:234	resource_guard 門檻依 max_concurrent_streams 縮放（N=3 錨點）
+test/unit/config.test.ts:255	resource_guard.scale_with_streams 為 false 時使用絕對門檻
+test/unit/config.test.ts:276	resource_guard 門檻順序錯誤時拒絕設定
+test/unit/config.test.ts:291	支援正式 YAML 的引號、註解與 flow sequence
+test/unit/config.test.ts:306	套用所有預設值並將併發數降為頻道數
+test/unit/config.test.ts:406	頻道數足夠時 max_concurrent_streams 預設為 3
+test/unit/config.test.ts:423	未指定 browser.engine 時預設為 chromium
+test/unit/config.test.ts:434	明確指定 firefox 仍受支援
+test/unit/config.test.ts:447	明確指定 chromium 仍受支援
+test/unit/config.test.ts:460	顯式併發數大於頻道數時降級並輸出 debug 事件
+test/unit/config.test.ts:476	替換 ${ENV_VAR} 且讓直接環境覆寫優先
+test/unit/config.test.ts:502	缺少的環境替換值會成為空字串並由欄位驗證拒絕
+test/unit/config.test.ts:514	只有 Client ID 與 Client Secret 時允許啟動設定
+test/unit/config.test.ts:529	拒絕不是 true 或 false 的 HEADLESS
+test/unit/config.test.ts:535	可由環境變數啟用 Telegram 並解析多個 chat ID
+test/unit/config.test.ts:564	可由環境變數啟用 Discord 並解析多個 channel ID
+test/unit/config.test.ts:736	設定檔不存在時拋出 ConfigFileNotFoundError
+test/unit/config.test.ts:747	YAML 語法錯誤時拋出 ConfigParseError
+test/unit/config.test.ts:765	拒絕形成循環物件的 YAML alias
+test/unit/config.test.ts:813	任何 parse 或 validation error 都不包含 access token 原文
+test/unit/config.test.ts:841	回傳物件、陣列與巢狀設定皆不可變
+test/unit/container-restart-controller.test.ts:12	第一次 request 會 emit 一次事件、flush 後 exit(1)
+test/unit/container-restart-controller.test.ts:37	多來源同時 request 仍只 exit 一次
+test/unit/container-restart-controller.test.ts:57	flush 逾時仍會 exit
+test/unit/container-restart-controller.test.ts:80	flush 失敗仍會 exit
+test/unit/container-restart-controller.test.ts:95	忽略巢狀 fields 以避免意外帶入敏感物件
+test/unit/container-restart-controller.test.ts:121	exit 前會 best-effort 呼叫 onNotify，且 notify 逾時仍會 exit
+test/unit/container-restart-controller.test.ts:156	onNotify 失敗仍會 flush 並 exit
+test/unit/credential.test.ts:25	找不到 storageState 時拋出可行動的專用錯誤
+test/unit/credential.test.ts:42	readFile 失敗時穩定區分不可讀，不依賴檔案權限或 root 身分
+test/unit/credential.test.ts:62	JSON 語法錯誤時拋出安全且可行動的專用錯誤
+test/unit/credential.test.ts:113	合法 storageState 回傳安全摘要並記錄 credential_checked
+test/unit/credential.test.ts:133	cookies 為空時警告但允許啟動
+test/unit/credential.test.ts:155	cookies 與 origins 可缺省，並將缺少 cookies 視為空值警告
+test/unit/credential.test.ts:168	API 設定摘要只回報是否已設定，不驗證 token 有效性
+test/unit/credential.test.ts:199	錯誤、結果與所有日誌皆不包含 cookie value 或 access token
+test/unit/credential.test.ts:228	底層 readFile 錯誤即使含敏感資料也不會進入公開錯誤
+test/unit/default-browser.test.ts:14	maps common default browser identifiers
+test/unit/default-browser.test.ts:36	marks Safari as unsupported for automation
+test/unit/default-browser.test.ts:43	puts a supported default browser first in preference order
+test/unit/default-browser.test.ts:55	does not put Safari in the launch order as a candidate
+test/unit/default-browser.test.ts:63	detects Twitch auth-token cookies
+test/unit/default-browser.test.ts:95	treats chromium family candidates as native launch when executable exists
+test/unit/discord-api.test.ts:9	uses Discord REST routes for gateway, commands, messages, interactions, and follow-up files
+test/unit/discord-api.test.ts:131	does not expose the bot token when network requests fail
+test/unit/discord-bot.test.ts:17	registers commands, identifies to the gateway, and handles allowed slash commands
+test/unit/discord-bot.test.ts:101	rejects interactions from unauthorized channels
+test/unit/discord-bot.test.ts:122	allows direct message interactions from configured Discord users
+test/unit/discord-bot.test.ts:144	rejects direct message interactions from unauthorized Discord users
+test/unit/discord-bot.test.ts:171	broadcasts service notifications to allowed channels
+test/unit/discord-bot.test.ts:214	忠誠點數指令會 defer 並格式化全部頻道結果
+test/unit/discord-bot.test.ts:257	找不到指定頻道時回覆 active 頻道清單
+test/unit/logging.test.ts:31	輸出 debug、info、warn 與 error 訊息
+test/unit/logging.test.ts:68	依最低層級過濾訊息
+test/unit/logging.test.ts:82	每次輸出恰好一行可解析 JSON 並保護保留欄位
+test/unit/logging.test.ts:103	遞迴遮罩大小寫不同的巢狀 object 與 array 敏感欄位
+test/unit/logging.test.ts:161	遞迴遮罩 Telegram 與 Discord 私人 identifier 欄位
+test/unit/logging.test.ts:198	遮罩錯誤字串中的 Bearer token 與常見敏感指派
+test/unit/logging.test.ts:226	遮罩錯誤字串中直接內嵌的 storageState 與 cookie 結構
+test/unit/logging.test.ts:242	安全序列化 Error、Error cause 與循環資料
+test/unit/logging.test.ts:269	遮罩巢狀 Error 的私人 identifier 屬性與訊息指派
+test/unit/logging.test.ts:292	提供完整且不重複的必要事件名稱，且每個事件都有標準欄位
+test/unit/logging.test.ts:332	flush 委派給注入的輸出目的地
+test/unit/playwright-browser-launcher.test.ts:26	default engine 使用 Chromium 並回傳共用 adapter
+test/unit/playwright-browser-launcher.test.ts:41	firefox engine 仍使用 Firefox 並回傳同一 adapter
+test/unit/playwright-browser-launcher.test.ts:56	chromium engine 使用 Chromium 並回傳同一 adapter
+test/unit/playwright-browser-page-adapter.test.ts:89	訂閱與取消訂閱 requestfailed
+test/unit/playwright-browser-page-adapter.test.ts:104	將 requestfailed 轉為消毒後的結構化診斷
+test/unit/playwright-browser-page-adapter.test.ts:134	requestfailed 抽出 GraphQL operationName 但不含 variables
+test/unit/playwright-browser-page-adapter.test.ts:166	GraphQL body 解析失敗不傳播例外
+test/unit/playwright-browser-page-adapter.test.ts:190	訂閱與取消訂閱 response
+test/unit/playwright-browser-page-adapter.test.ts:205	將 response 轉為含 status 的結構化診斷
+test/unit/playwright-browser-page-adapter.test.ts:237	訂閱與取消訂閱 console
+test/unit/playwright-browser-page-adapter.test.ts:252	將 console message 轉為消毒後的結構化診斷
+test/unit/playwright-browser-page-adapter.test.ts:286	console text 拋錯時吞掉例外且不呼叫 listener
+test/unit/reconcile-coordinator.test.ts:7	進行中的 reconcile 保留，尚未處理的 desired state 只保留最新一筆
+test/unit/reconcile-coordinator.test.ts:37	shutdown 停止接收新 request 並只等待有限 grace period
+test/unit/resource-guard-policy.test.ts:57	低於門檻時不動作
+test/unit/resource-guard-policy.test.ts:64	warning 只觸發一次，降到 reset 以下才解除
+test/unit/resource-guard-policy.test.ts:95	需連續兩個高水位 sample 才 recycle
+test/unit/resource-guard-policy.test.ts:108	emergency memory 優先於 recycle
+test/unit/resource-guard-policy.test.ts:116	swap emergency 立即重啟容器
+test/unit/resource-guard-policy.test.ts:126	oom / max event 上升觸發 container restart
+test/unit/resource-guard-policy.test.ts:148	emergency-only 模式略過 recycle/warning，但仍偵測 OOM
+test/unit/resource-guard-policy.test.ts:167	啟動 grace 期間忽略 fast growth，之後在 warning 以上才觸發
+test/unit/resource-guard-policy.test.ts:197	browser restart 後清除 sample history 並套用 rate grace
+test/unit/resource-guard-policy.test.ts:225	post-recycle observation 期間也不會因 refill 觸發 fast_memory_growth
+test/unit/resource-guard-policy.test.ts:244	post-recycle 成功後清除觀察；逾時則 container restart
+test/unit/resource-guard-policy.test.ts:266	memory.events.high 上升可被 takeMemoryHighEvent 讀取且非 fatal
+test/unit/resource-guard-thresholds.test.ts:22	N=3 時維持錨點
+test/unit/resource-guard-thresholds.test.ts:33	N=5 時依公式放大
+test/unit/resource-guard-thresholds.test.ts:44	scale_with_streams 關閉時使用絕對值
+test/unit/resource-guard-thresholds.test.ts:55	memory.max 低於 emergency 時往下壓並維持順序
+test/unit/resource-guard-thresholds.test.ts:75	安全整數以 number 輸出，過大值以字串輸出
+test/unit/resource-snapshots-to-csv.test.ts:7	保留 cgroup CPU 累計時間欄位
+test/unit/reward-claimer.test.ts:129	使用 primary selector 點擊可領取按鈕
+test/unit/reward-claimer.test.ts:157	點擊領取按鈕時使用短 timeout
+test/unit/reward-claimer.test.ts:172	一般 click 失敗時使用 DOM click fallback
+test/unit/reward-claimer.test.ts:192	primary selector 不存在時使用 summary 結構 fallback
+test/unit/reward-claimer.test.ts:210	批次讀取 primary metadata，避免逐一呼叫 locator probe
+test/unit/reward-claimer.test.ts:231	summary 有多個可點擊元素時不猜測要點擊哪一個
+test/unit/reward-claimer.test.ts:251	summary 內有 aria-label 的餘額控制不視為領取按鈕
+test/unit/reward-claimer.test.ts:270	primary selector 已存在但 disabled 時不使用 fallback
+test/unit/reward-claimer.test.ts:290	BetterTTV selector 若帶 destructive class 時不點擊
+test/unit/reward-claimer.test.ts:309	按鈕不可見時回傳 not_found
+test/unit/reward-claimer.test.ts:326	按鈕不存在時回傳 not_found 且不寫 warn
+test/unit/reward-claimer.test.ts:342	點擊失敗時回傳安全錯誤並記錄 warn
+test/unit/reward-claimer.test.ts:383	selector API 拋錯時不向外拋出
+test/unit/reward-claimer.test.ts:403	成功後同一 channel 在 60 秒內不重複點擊
+test/unit/reward-claimer.test.ts:428	logger 拋錯時仍回傳領取結果
+test/unit/reward-claimer.test.ts:452	hasClaimableBonus 在主要按鈕可見時回傳 true
+test/unit/reward-claimer.test.ts:462	hasClaimableBonus 在沒有可見按鈕時回傳 false
+test/unit/reward-claimer.test.ts:474	hasClaimableBonus 在 fallback 剛好一個可點按鈕時回傳 true
+test/unit/reward-claimer.test.ts:486	hasClaimableBonus 在 DOM 檢查拋錯時回傳 false
+test/unit/runtime-config-manager.test.ts:23	更新 channels 並保留其他 YAML 設定與註解
+test/unit/runtime-config-manager.test.ts:59	頻道減少時自動降低最大同時觀看
+test/unit/runtime-config-manager.test.ts:82	拒絕空頻道、非法名稱與超過頻道數的上限
+test/unit/runtime-config-manager.test.ts:104	大小寫不敏感去除重複頻道
+test/unit/runtime-diagnostics.test.ts:10	產生完整、安全且可關聯的 startup diagnostics
+test/unit/runtime-diagnostics.test.ts:49	fingerprint 排除 credentials、storage path 與 bot private IDs
+test/unit/runtime-diagnostics.test.ts:99	缺值或不安全版本欄位使用明確 null/unknown
+test/unit/runtime-resource-monitor.test.ts:34	啟動時立即記錄 process 欄位，停止後不再排程
+test/unit/runtime-resource-monitor.test.ts:77	cgroup 可用時依政策觸發 browser recycle
+test/unit/runtime-resource-monitor.test.ts:139	warning latch 未降到 reset 門檻前 snapshot 維持 warning
+test/unit/runtime-resource-monitor.test.ts:199	browser recycle 進行中仍會偵測 cgroup OOM 並要求重啟容器
+test/unit/runtime-resource-monitor.test.ts:262	guard 高頻採樣使用 policy snapshot，telemetry cadence 使用 full snapshot
+test/unit/runtime-resource-monitor.test.ts:326	runtime snapshot 包含 cgroup CPU 累計時間
+test/unit/runtime-resource-monitor.test.ts:364	emergency 時呼叫 container restart handler
+test/unit/scheduler-stall-watchdog.test.ts:10	checkInFlight 持續超過門檻時透過 ContainerRestartController 要求重啟
+test/unit/scheduler-stall-watchdog.test.ts:67	checkInFlight 解除後會重置卡住計時
+test/unit/scheduler-stall-watchdog.test.ts:105	stop 後不再檢查 scheduler 狀態
+test/unit/session-manager.test.ts:125	依輸入順序新增 session 並回報 active channels
+test/unit/session-manager.test.ts:147	先依 registry 順序移除，再依 activeChannels 順序新增
+test/unit/session-manager.test.ts:169	保持既有 session、不重建，並依最新輸入順序回報
+test/unit/session-manager.test.ts:180	可擷取預設或指定中的 active session 截圖
+test/unit/session-manager.test.ts:195	可取得全部或指定 active session 的忠誠點數
+test/unit/session-manager.test.ts:228	依 active session 順序回報頁面重整狀態
+test/unit/session-manager.test.ts:256	可手動重整全部或指定 active session
+test/unit/session-manager.test.ts:277	start failure 不留 registry，且不影響其他頻道啟動
+test/unit/session-manager.test.ts:301	page crash 只對該頻道 backoff，其他 active session 保持運作
+test/unit/session-manager.test.ts:340	quarantine 到期前不啟動，到期後只啟動一個 probe
+test/unit/session-manager.test.ts:371	recoverable start failure 進入 cooldown，fatal prerequisite 不計入
+test/unit/session-manager.test.ts:407	只有從 configured channels 移除時才清除 recovery state
+test/unit/session-manager.test.ts:421	session start 卡住時會 timeout 並繼續啟動後續頻道
+test/unit/session-manager.test.ts:484	啟動失敗為瀏覽器關閉時會清理舊 session 並短重試
+test/unit/session-manager.test.ts:525	啟動失敗為 Twitch 導覽逾時時會清理舊 session 並短重試
+test/unit/session-manager.test.ts:573	導覽短重試仍逾時時只在最終失敗後回報一次
+test/unit/session-manager.test.ts:607	非導覽逾時的啟動失敗不回報 navigation outcome
+test/unit/session-manager.test.ts:625	navigation outcome observer 可在 reconcile 鎖外失效 session
+test/unit/session-manager.test.ts:639	新增多個 session 時會在後續啟動前套用間隔
+test/unit/session-manager.test.ts:671	factory failure 不影響後續頻道，下一輪可重試
+test/unit/session-manager.test.ts:691	stop failure 仍移除舊 session 並繼續新增
+test/unit/session-manager.test.ts:718	截圖失敗時回傳 undefined 並記錄可診斷錯誤
+test/unit/session-manager.test.ts:749	stopAll 隔離 stop failure、清空 registry 且可重複呼叫
+test/unit/session-manager.test.ts:774	invalidate 移除並停止 session，重複呼叫無副作用且可由 reconcile 重建
+test/unit/session-manager.test.ts:798	stop failure 時 invalidate 仍移除，下一輪可重建
+test/unit/session-manager.test.ts:819	併發 reconcile 依呼叫順序序列化且不重複建立同頻道
+test/unit/session-manager.test.ts:849	stopAll 會等待先提交的 reconcile 完成後再清空
+test/unit/session-manager.test.ts:872	invalidate 會等待先提交的 reconcile 完成後移除該 session
+test/unit/session-manager.test.ts:895	單一頻道 start 卡住不會阻塞其他頻道 invalidate
+test/unit/session-manager.test.ts:925	stopAll 會取消進行中的 start 後在有限時間內完成
+test/unit/session-manager.test.ts:952	cancelStart 未解除卡住操作時 stopAll 仍會 timeout 完成
+test/unit/session-manager.test.ts:983	輸入只對完全相同字串去重，大小寫不同視為不同頻道
+test/unit/session-manager.test.ts:1003	失敗日誌遮罩敏感錯誤內容且不傳 session object
+test/unit/side-nav-collapser.test.ts:7	按鈕表示側欄展開時自動收合
+test/unit/side-nav-collapser.test.ts:15	aria-expanded 為 false 時不重複點擊
+test/unit/side-nav-collapser.test.ts:25	缺少按鈕時安全略過
+test/unit/side-nav-collapser.test.ts:31	按鈕點擊失敗時不向外拋錯
+test/unit/stream-playback-optimizer.test.ts:10	目標畫質不存在時選最低可用畫質
+test/unit/stream-playback-optimizer.test.ts:16	靜音並選擇目標畫質
+test/unit/stream-playback-optimizer.test.ts:48	選畫質時忽略 Picture-in-picture 選項並停用 video PiP
+test/unit/stream-playback-optimizer.test.ts:85	auto 畫質只靜音，不開啟設定選單
+test/unit/stream-playback-optimizer.test.ts:106	播放器元素不存在時立即略過，不觸發 Playwright 等待
+test/unit/stream-playback-optimizer.test.ts:125	目前解析度符合目標時略過設定選單
+test/unit/stream-selector.test.ts:22	無人開台時回傳空陣列
+test/unit/stream-selector.test.ts:35	live 數量少於上限時回傳所有 live 頻道
+test/unit/stream-selector.test.ts:49	live 數量等於上限時回傳所有 live 頻道
+test/unit/stream-selector.test.ts:63	live 數量超過上限時依設定順序截斷
+test/unit/stream-selector.test.ts:77	API 回傳順序不同時仍依設定順序選台
+test/unit/stream-selector.test.ts:91	忽略未設定頻道的 live status
+test/unit/stream-selector.test.ts:104	缺少 status 的設定頻道視為 offline
+test/unit/stream-selector.test.ts:114	重複設定頻道以大小寫不敏感方式去重並保留第一次拼法
+test/unit/stream-selector.test.ts:127	重複且大小寫不同的 status 一致為 live 時可選取一次
+test/unit/stream-selector.test.ts:140	重複 status 衝突時採 offline 優先的保守行為
+test/unit/stream-selector.test.ts:167	不改變 configuredChannels 或 liveStatuses 輸入
+test/unit/telegram-api.test.ts:9	以 POST JSON 呼叫 getUpdates、setMyCommands 與 sendMessage
+test/unit/telegram-api.test.ts:111	網路錯誤不包含 bot token 或完整 URL
+test/unit/telegram-api.test.ts:131	API 拒絕時不轉送 Telegram description 內容
+test/unit/telegram-api.test.ts:155	無效 JSON 保留安全的 HTTP status 與錯誤分類
+test/unit/telegram-bot.test.ts:16	啟動、處理授權指令並可停止長輪詢
+test/unit/telegram-bot.test.ts:88	忽略未授權 chat 且不執行管理指令
+test/unit/telegram-bot.test.ts:105	回覆失敗時不重複執行同一個管理指令
+test/unit/telegram-bot.test.ts:130	推送開台、離線與領點通知，忽略 not_found
+test/unit/telegram-bot.test.ts:159	poll failure 記錄安全分類、HTTP status 與 retry delay
+test/unit/telegram-bot.test.ts:188	send failure 不記錄 chat ID、endpoint 或 request body
+test/unit/telegram-bot.test.ts:213	推送 page crash、browser restart 與 container restart 通知
+test/unit/telegram-bot.test.ts:239	尚未啟動時 stop 不傳送誤導通知
+test/unit/telegram-bot.test.ts:248	沒有 active session 時截圖指令回覆提示
+test/unit/telegram-bot.test.ts:263	忠誠點數指令可查詢全部或指定頻道
+test/unit/telegram-bot.test.ts:316	沒有 active session 時忠誠點數指令回覆提示
+test/unit/telegram-bot.test.ts:329	未指定頻道時回傳所有 active session 截圖
+test/unit/telegram-bot.test.ts:363	未指定頻道截圖遇到 stale session 時會跳過並繼續回傳可用頻道
+test/unit/telegram-bot.test.ts:396	可由指令更新頻道清單與最大同時觀看
+test/unit/twitch-api.test.ts:25	沒有初始 token 時先用 Client Secret 取得 token 再查詢
+test/unit/twitch-api.test.ts:48	有 client secret 時每小時驗證有效 token，未近到期不換發
+test/unit/twitch-api.test.ts:71	token 剩餘少於一天時自動換發後使用新 token 查詢
+test/unit/twitch-api.test.ts:100	Helix 回傳 401 時換發 token 並只重試一次
+test/unit/twitch-api.test.ts:129	使用 URLSearchParams 與必要 headers 查詢多頻道並轉換部分 live
+test/unit/twitch-api.test.ts:201	data 為空時依設定順序回傳所有 offline
+test/unit/twitch-api.test.ts:228	API 回傳順序不同與 login 大小寫不同時仍保持設定順序
+test/unit/twitch-api.test.ts:248	超過 100 個 user_login 時分批查詢且保持完整設定順序
+test/unit/twitch-api.test.ts:274	空頻道清單不發送 request
+test/unit/twitch-api.test.ts:307	HTTP 429 優先使用 Ratelimit-Reset epoch seconds
+test/unit/twitch-api.test.ts:337	HTTP 429 遠期 Ratelimit-Reset 最多只退避五分鐘
+test/unit/twitch-api.test.ts:408	request timeout 會中止 fetch 並拋出 temporary timeout 錯誤
+test/unit/twitch-api.test.ts:438	request timeout 會涵蓋收到 headers 後的 response body
+test/unit/twitch-api.test.ts:469	拒絕超過一百萬 bytes 的 response body
+test/unit/twitch-api.test.ts:490	fetch AbortError 分類為 temporary aborted 錯誤
+test/unit/twitch-api.test.ts:505	網路錯誤分類為 temporary 且不轉送原始錯誤內容
+test/unit/twitch-api.test.ts:536	無法解析的 JSON 分類為 temporary invalid-response
+test/unit/watchdog-scheduler.test.ts:27	第一輪 live 輸出 online，後續不變不重複輸出，offline 時輸出轉換
+test/unit/watchdog-scheduler.test.ts:85	第一輪全部 offline 不輸出狀態噪音但仍 reconcile 空集合
+test/unit/watchdog-scheduler.test.ts:99	高優先序頻道上線時由 selector 與 reconcile 替換低優先序頻道
+test/unit/watchdog-scheduler.test.ts:218	rate-limit 視窗結束前 interval tick 會略過，到 retryAt 才重新請求
+test/unit/watchdog-scheduler.test.ts:266	runOnce 不重入，略過的呼叫立即 resolve
+test/unit/watchdog-scheduler.test.ts:290	API polling 完成後不等待 session reconcile
+test/unit/watchdog-scheduler.test.ts:308	start 立即執行首輪並依設定建立 interval，重複 start 不新增 timer
+test/unit/watchdog-scheduler.test.ts:333	stop 清除 timer 並等待執行中的首輪完成，停止後 timer callback 無效
+test/unit/watchdog-scheduler.test.ts:363	API 回傳缺少 configured channel 時保留 session 與上一輪狀態
+test/unit/watchdog-scheduler.test.ts:398	更新 runtime config 後立即套用新頻道與同時觀看上限
+test/unit/watchdog-scheduler.test.ts:431	錯誤日誌不轉送 API 原始錯誤中的 token、Authorization 或 Bearer 值

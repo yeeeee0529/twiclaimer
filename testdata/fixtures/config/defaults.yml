@@ -1,0 +1,4 @@
+channels: [streamer_one, streamer_two]
+twitch_api:
+  client_id: fixture-client-id
+  access_token: fixture-access-token

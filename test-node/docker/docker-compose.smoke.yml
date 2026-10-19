@@ -1,0 +1,16 @@
+services:
+  twitch-watchdog:
+    image: ${SMOKE_IMAGE:-twitch-watchdog:smoke}
+    container_name: ${SMOKE_CONTAINER_NAME:-twitch-watchdog-smoke}
+    restart: "no"
+    network_mode: none
+    environment:
+      CONFIG_PATH: /app/config.yml
+    volumes:
+      - type: bind
+        source: ${SMOKE_CONFIG_PATH:?SMOKE_CONFIG_PATH is required}
+        target: /app/config.yml
+      - type: bind
+        source: ${SMOKE_STATE_DIR:?SMOKE_STATE_DIR is required}
+        target: /data/browser-state
+        read_only: true

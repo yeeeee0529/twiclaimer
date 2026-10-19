@@ -1,0 +1,6 @@
+target/
+node_modules/
+.cache/
+doc/spec/traces/*.pw.log
+s0-logs*.jsonl
+.DS_Store

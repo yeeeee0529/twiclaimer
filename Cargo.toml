@@ -1,0 +1,37 @@
+[package]
+name = "twiclaimer"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+publish = false
+
+[dependencies]
+async-trait = "0.1.92"
+base64 = "0.23.1"
+futures-util = "0.3.34"
+libc = "0.2.191"
+nix = { version = "0.31.3", features = ["fs", "process", "resource", "signal"] }
+regex = "1.13.1"
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "json", "multipart", "query"] }
+rustls = "0.23.46"
+ryu-js = "1.0.3"
+saphyr-parser = "0.2.2"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.154", features = ["preserve_order"] }
+sha2 = "0.11.1"
+tempfile = "3.27.0"
+time = { version = "0.3.55", features = ["formatting", "macros"] }
+tokio = { version = "1.53.3", features = ["fs", "io-util", "macros", "net", "process", "rt", "signal", "sync", "time"] }
+tokio-util = { version = "0.7.20", features = ["rt"] }
+twilight-gateway = { version = "0.17.1", default-features = false, features = ["rustls-platform-verifier"] }
+twilight-model = "0.17.1"
+url = "2.5.8"
+uuid = { version = "1.28.0", features = ["v4"] }
+
+[dev-dependencies]
+tokio = { version = "1.53.3", features = ["test-util"] }
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+strip = true

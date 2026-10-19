@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Mock content warning channel</title>
+  </head>
+  <body>
+    <main>
+      <section id="warning">
+        <h1>Just one second...</h1>
+        <p>This content may not be appropriate for you to watch.</p>
+        <button type="button" data-channel-health="content-warning">
+          Start Watching
+        </button>
+      </section>
+      <section
+        id="player"
+        data-a-target="video-player"
+        data-channel-health="live"
+        aria-label="Live video player"
+        hidden
+      >
+        Live stream content
+      </section>
+    </main>
+    <script>
+      document
+        .querySelector('[data-channel-health="content-warning"]')
+        .addEventListener('click', () => {
+          document.querySelector('#warning').hidden = true;
+          document.querySelector('#player').hidden = false;
+        });
+    </script>
+  </body>
+</html>

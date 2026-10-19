@@ -1,0 +1,104 @@
+channels:
+  - streamer_one
+  - streamer_two
+
+check_interval_seconds: 60
+max_concurrent_streams: 2
+headless: true
+storage_state_path: /data/browser-state/storage-state.json
+log_level: info
+
+twitch_api:
+  client_id: your_twitch_client_id
+  client_secret: your_twitch_client_secret
+  # access_token is optional and only used when client_secret is empty.
+  access_token: ""
+
+browser:
+  # Browser engine; Chromium is the runtime default / 瀏覽器引擎；預設為 Chromium
+  engine: chromium
+  navigation_timeout_ms: 30000
+  page_health_check_interval_seconds: 60
+  reward_check_interval_seconds: 30
+  # 0 disables scheduled page refresh (recommended). Manual /refresh_now still works.
+  page_refresh_interval_seconds: 0
+  restart_on_crash: true
+  stream_quality: 160p
+  enforce_stream_quality_seconds: 120
+  viewport_width: 1280
+  viewport_height: 720
+  mute_audio: true
+  block_images: false
+  block_fonts: false
+  block_known_tracking: false
+  # Block the Twitch chat WebSocket to cut DOM/CPU load on busy channels.
+  disable_chat: true
+  resource_telemetry_interval_seconds: 60
+  # Per-channel recovery / 單頻道復原政策
+  recovery:
+    page_crash_backoff_seconds: [30, 60, 120]
+    channel_crash_window_seconds: 600
+    channel_quarantine_threshold: 4
+    channel_quarantine_seconds: 900
+    stable_reset_seconds: 1800
+    multi_channel_crash_window_seconds: 15
+    multi_channel_crash_threshold: 2
+    browser_failure_window_seconds: 600
+    browser_failure_container_threshold: 3
+  # Session startup cooldown / Session 啟動冷卻
+  session_start:
+    failure_backoff_seconds: [30, 60, 120]
+    maximum_cooldown_seconds: 900
+  # Memory thresholds are binary MiB anchors for baseline_streams (default 3).
+  # When scale_with_streams is true, effective = base + (anchor - base) * (N / baseline).
+  # Docker mem_limit defaults to 6g for about 3 concurrent streams; raise it for larger N.
+  resource_guard:
+    enabled: true
+    sample_interval_seconds: 2
+    startup_rate_grace_seconds: 120
+    scale_with_streams: true
+    baseline_streams: 3
+    base_memory_mib: 512
+    warning_memory_mib: 4096
+    warning_reset_memory_mib: 3840
+    browser_recycle_memory_mib: 4608
+    browser_recycle_consecutive_samples: 2
+    emergency_memory_mib: 5376
+    emergency_swap_mib: 768
+    # Rate rule: growth >= this many MiB within the window, AND current
+    # memory already at/above warning_memory_mib (absolute floor).
+    fast_growth_mib: 1024
+    fast_growth_window_seconds: 30
+    # After any browser restart, ignore fast_memory_growth for this long so
+    # expected session refill is not treated as a fatal leak.
+    post_browser_restart_rate_grace_seconds: 120
+    post_recycle_observation_seconds: 20
+    post_recycle_target_memory_mib: 4096
+    post_recycle_minimum_drop_mib: 512
+
+telegram:
+  enabled: false
+  bot_token: ""
+  # Telegram chat IDs must be quoted integer strings, not @usernames.
+  # Example:
+  # allowed_chat_ids:
+  #   - "5009748887"
+  #   - "-1001234567890"
+  allowed_chat_ids: []
+  polling_timeout_seconds: 25
+
+discord:
+  enabled: false
+  bot_token: ""
+  application_id: ""
+  guild_id: ""
+  # Discord IDs must be quoted numeric snowflake IDs, not names like #general.
+  # Example:
+  # allowed_channel_ids:
+  #   - "1520430059771400353"
+  allowed_channel_ids: []
+  allow_direct_messages: false
+  # Example:
+  # allowed_user_ids:
+  #   - "678200367300870154"
+  allowed_user_ids: []
