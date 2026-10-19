@@ -100,6 +100,7 @@
 - 理由：同 DEC-010——TSV 要涵蓋所有舊測試標題，嚴格模式才能使用；移植註解的格式要一致。
 - 影響：TSV 列數再增加；日後新形式比照補抓。
 
+
 ## DEC-012 saphyr 與 yaml 套件判定不同的情況（S2.2 YAML 載入）
 
 - 日期：2026-10-19（步驟：S2.2）
@@ -112,3 +113,11 @@
 - 決定：暫不處理，維持 Rust 版現行行為。
 - 理由：設定檔（config.yml）不會出現 %YAML 指示詞、tab 縮排或 doc-end 開頭檔；要改行為前應先在 `tools/ref/make-yaml-cases.sh` 補案例、重產 golden（§7.1）。
 - 影響：A/B 比對（§10）若在設定檔出現差異，先回來查此筆。另一個規格解讀：alias 鍵或「解析型別不同但字串化後相同」的鍵（如 `? 1` 與 `? "1"`、兩個 `.nan`），yaml 套件在 toJS 時覆寫原位置、不報錯；§7.1 的「重複的鍵在建立時就報錯」由組合階段的 `uniqueKeys` 檢查（僅比較標量鍵的解析值）實現，Rust 版照 yaml 套件行為覆寫，沒有為此新增第二種重複鍵錯誤。
+
+## DEC-013 config 形狀型別在使用端先行定義（S2.1／S2.5）
+
+- 日期：2026-10-19（步驟：S2.1 剩餘＋S2.5 剩餘）
+- 問題：`ChannelRecoveryPolicy` 與 `ResourceGuardPolicy` 的介面需要 `BrowserRecoveryConfig`／`BrowserSessionStartConfig`／`ResourceGuardPolicyConfig`／`ResourceGuardEffectiveThresholds`／`CgroupSnapshot`／`CgroupMemoryEvents`，這些型別原屬舊版 `config/AppConfig.ts`、`config/resourceGuardThresholds.ts`、`app/CgroupV2Reader.ts`，移植前尚未落地（S2.2 loader 進行中）。
+- 決定：先在 `src/sessions/recovery.rs`／`src/app/resource_guard.rs` 定義同形狀的 `pub(crate)` 型別並附模組文件；S2.2 loader 與 S3.2 CgroupV2Reader 落地後改為重用 config 模組的型別、刪除本處定義。
+- 理由：並行分工的檔案邊界（禁止改 `src/config/`）不應阻擋純邏輯模組的移植；同形狀欄位（名稱、型別）與舊版一致，統一時只改 import 與建構處。
+- 影響：S2.2 合併時需要一次統一 refactor；合併前 `resource_guard.rs` 內也移植了 `mib_to_bytes`／`bytes_to_mib_number`（thresholds 移植後會重複，統一時刪除）。其他次要差異：`truncate_text` 在 `diagnostics.rs` 與 `channel_url.rs` 各有一份（UTF-16 語意、各測正確，統一時合併）；Rust `trim` 不含 `U+FEFF`（僅影響無測試覆蓋的邊界）；空 `pageCrashBackoffSeconds` 舊版得 NaN、Rust 以 0 秒對應（u64 界域）。
