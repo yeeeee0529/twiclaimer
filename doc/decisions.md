@@ -99,3 +99,16 @@
 - 決定：`extract-spec.sh` 加 awk 狀態機，抓「`])(` 之後的下一行是引號標題」的兩種形式（案例表跨行、案例表同行收尾），併入 TSV；重產 TSV 後把 5 個測試的註解改回標準 `// 原測試：<標題>`。
 - 理由：同 DEC-010——TSV 要涵蓋所有舊測試標題，嚴格模式才能使用；移植註解的格式要一致。
 - 影響：TSV 列數再增加；日後新形式比照補抓。
+
+## DEC-012 saphyr 與 yaml 套件判定不同的情況（S2.2 YAML 載入）
+
+- 日期：2026-10-19（步驟：S2.2）
+- 問題：§7.1 要求以 saphyr-parser 重現 yaml 2.x（舊版依賴）的行為；兩套實作在下列情況判定不同，且 golden 的 `l*.load.yml` 未涵蓋（皆以 node 對舊版 yaml 套件實測確認）：
+  1. `%YAML 1.1` 指示詞：yaml 套件會整份改用 1.1 schema（`yes`／`on` 變 bool、`0o17` 變字串）；saphyr 只發事件、無 schema 概念。Rust 版照 §7.1 一律用 core schema，同一份檔案可能因此與舊版不同（`a: yes` → `"yes"` vs `true`）。
+  2. `:` 後接 tab（`a:\t1`）：yaml 套件接受（strict 關閉），saphyr 報 ScanError（`':' must be followed by a valid YAML whitespace`）。Rust 版（走 saphyr）回「設定檔格式錯誤：YAML 語法無效」。
+  3. 只有 `...`（doc-end）而沒有文件：yaml 套件的 composer 報錯（`Unexpected doc-end without preceding document`）；saphyr 忽略、不發任何文件事件。Rust 版回 null。
+  4. 檔案中段的 UTF-8 BOM：yaml 套件在任何位置都丟棄 byte-order-mark token；Rust 版只去開頭 BOM，中段的 U+FEFF 會留在標量文字裡。
+  5. 指向不存在 anchor 的 alias：yaml 套件在 toJS 階段丟 ReferenceError（`Unresolved alias (the anchor must be set before the alias): x`），saphyr 在掃描階段就報錯；對外訊息同為「設定檔格式錯誤：YAML 語法無效」，僅觸發時機不同。§7.2 寫回時的錯誤訊息照 yaml 套件原文輸出，不受影響。
+- 決定：暫不處理，維持 Rust 版現行行為。
+- 理由：設定檔（config.yml）不會出現 %YAML 指示詞、tab 縮排或 doc-end 開頭檔；要改行為前應先在 `tools/ref/make-yaml-cases.sh` 補案例、重產 golden（§7.1）。
+- 影響：A/B 比對（§10）若在設定檔出現差異，先回來查此筆。另一個規格解讀：alias 鍵或「解析型別不同但字串化後相同」的鍵（如 `? 1` 與 `? "1"`、兩個 `.nan`），yaml 套件在 toJS 時覆寫原位置、不報錯；§7.1 的「重複的鍵在建立時就報錯」由組合階段的 `uniqueKeys` 檢查（僅比較標量鍵的解析值）實現，Rust 版照 yaml 套件行為覆寫，沒有為此新增第二種重複鍵錯誤。
