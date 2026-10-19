@@ -5,7 +5,7 @@ channels:
 
 check_interval_seconds: 90
 max_concurrent_streams: 2
-headless: false
+headless: true
 storage_state_path: /tmp/test-storage-state.json
 log_level: debug
 

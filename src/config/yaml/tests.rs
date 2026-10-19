@@ -1,10 +1,8 @@
 //! YAML 載入的測試：golden 案例逐例比對（`testdata/golden/config/*.load.yml`，
 //! 預期值由舊版實作產生，D11），外加 core schema 與 alias 規則的單元測試。
 use super::{JsValue, ResolvedScalar, parse_yaml, resolve_plain_scalar, resolve_scalar};
+use crate::config::golden::{GOLDEN_DIR, json_eq};
 use saphyr_parser::{ScalarStyle, Tag};
-
-/// golden 案例目錄。
-const GOLDEN_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/testdata/golden/config");
 
 /// 測試輔助：字串值。
 fn s(value: &str) -> JsValue {
@@ -97,33 +95,6 @@ fn js_value_to_json(value: &JsValue) -> serde_json::Value {
             }
             serde_json::Value::Object(map)
         }
-    }
-}
-
-/// 比較 golden 的 JSON：物件比對鍵的順序與值、數字先轉 f64（NaN 視為相等）。
-fn json_eq(actual: &serde_json::Value, expected: &serde_json::Value) -> bool {
-    match (actual, expected) {
-        (serde_json::Value::Number(x), serde_json::Value::Number(y)) => {
-            let (Some(x), Some(y)) = (x.as_f64(), y.as_f64()) else {
-                return false;
-            };
-            x == y || (x.is_nan() && y.is_nan())
-        }
-        (serde_json::Value::String(x), serde_json::Value::String(y)) => x == y,
-        (serde_json::Value::Bool(x), serde_json::Value::Bool(y)) => x == y,
-        (serde_json::Value::Null, serde_json::Value::Null) => true,
-        (serde_json::Value::Array(x), serde_json::Value::Array(y)) => {
-            x.len() == y.len() && x.iter().zip(y.iter()).all(|(a, b)| json_eq(a, b))
-        }
-        (serde_json::Value::Object(x), serde_json::Value::Object(y)) => {
-            x.len() == y.len()
-                && x.iter()
-                    .zip(y.iter())
-                    .all(|((key_x, value_x), (key_y, value_y))| {
-                        key_x == key_y && json_eq(value_x, value_y)
-                    })
-        }
-        _ => false,
     }
 }
 
