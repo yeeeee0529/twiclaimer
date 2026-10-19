@@ -7,12 +7,27 @@ out="${2:-doc/spec}"
 mkdir -p "${out}"
 
 # 每列：<檔案>:<行號><TAB><標題>（含 it.each／test.each）
-# DEC-010：第二條 grep 補抓案例表跨行的 it.each（`])('標題'` 續行）。
+# DEC-010：第二條 grep 補抓案例表跨行、`])('標題'` 同行收尾的形式。
+# DEC-011：awk 補抓標題在 `])(` 下一行的兩種形式（案例表跨行或同行收尾）。
 {
   grep -rnoE "^\s*(it|test)(\.each\([^)]*\))?\(\s*['\"\`][^'\"\`]+" "${old}/test" --include=*.ts \
     | sed -E "s/:[[:space:]]*(it|test)(\.each\([^)]*\))?\([[:space:]]*['\"\`]/\t/"
   grep -rnoE "^\s*\]\)\(\s*['\"\`][^'\"\`]+" "${old}/test" --include=*.ts \
     | sed -E "s/:[[:space:]]*\]\)\([[:space:]]*['\"\`]/\t/" || true
+  find "${old}/test" -name '*.ts' -print0 | xargs -0 awk '
+    FNR == 1 { expect_title = 0 }
+    expect_title {
+      if ($0 ~ /^[[:space:]]*['\''"`][^'\''"`]*['\''"`][,]?[[:space:]]*$/) {
+        line = $0
+        gsub(/^[[:space:]]*['\''"`]|['\''"`],?[[:space:]]*$/, "", line)
+        print FILENAME ":" FNR "\t" line
+      }
+      expect_title = 0
+      next
+    }
+    /^[[:space:]]*\]\)\([[:space:]]*$/ { expect_title = 1; next }
+    /^[[:space:]]*(it|test)\.each\(.*\)\([[:space:]]*$/ { expect_title = 1; next }
+  '
 } | sed -E "s#^${old}/##" \
   | LC_ALL=C sort -t: -k1,1 -k2,2n > "${out}/ts-test-titles.tsv"
 

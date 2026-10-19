@@ -52,6 +52,7 @@ test/unit/browser-diagnostics.test.ts:133	無效 JSON 回傳空陣列且不拋�
 test/unit/browser-diagnostics.test.ts:140	非物件或非字串 operationName 一律忽略
 test/unit/browser-diagnostics.test.ts:146	超過數量上限時只保留前 N 個
 test/unit/browser-diagnostics.test.ts:157	過長 operationName 依上限裁切
+test/unit/browser-diagnostics.test.ts:189	status %s / %s / %s → %s
 test/unit/browser-diagnostics.test.ts:221	%s / %s → %s
 test/unit/browser-diagnostics.test.ts:285	%s / %s / %s → %s
 test/unit/browser-diagnostics.test.ts:297	超過上限時裁切，未超過時原樣回傳
@@ -365,6 +366,7 @@ test/unit/stream-selector.test.ts:104	缺少 status 的設定頻道視為 offlin
 test/unit/stream-selector.test.ts:114	重複設定頻道以大小寫不敏感方式去重並保留第一次拼法
 test/unit/stream-selector.test.ts:127	重複且大小寫不同的 status 一致為 live 時可選取一次
 test/unit/stream-selector.test.ts:140	重複 status 衝突時採 offline 優先的保守行為
+test/unit/stream-selector.test.ts:155	maxConcurrentStreams=%s 不是正整數時回傳空陣列
 test/unit/stream-selector.test.ts:167	不改變 configuredChannels 或 liveStatuses 輸入
 test/unit/telegram-api.test.ts:9	以 POST JSON 呼叫 getUpdates、setMyCommands 與 sendMessage
 test/unit/telegram-api.test.ts:111	網路錯誤不包含 bot token 或完整 URL
@@ -393,8 +395,11 @@ test/unit/twitch-api.test.ts:201	data 為空時依設定順序回傳所有 offli
 test/unit/twitch-api.test.ts:228	API 回傳順序不同與 login 大小寫不同時仍保持設定順序
 test/unit/twitch-api.test.ts:248	超過 100 個 user_login 時分批查詢且保持完整設定順序
 test/unit/twitch-api.test.ts:274	空頻道清單不發送 request
+test/unit/twitch-api.test.ts:283	HTTP %s 記錄 auth 事件並拋出可分類錯誤
 test/unit/twitch-api.test.ts:307	HTTP 429 優先使用 Ratelimit-Reset epoch seconds
 test/unit/twitch-api.test.ts:337	HTTP 429 遠期 Ratelimit-Reset 最多只退避五分鐘
+test/unit/twitch-api.test.ts:361	HTTP 429 reset 無法解析時以 %s 秒輪詢間隔計算 fallback
+test/unit/twitch-api.test.ts:390	HTTP %s 拋出 temporary server 錯誤
 test/unit/twitch-api.test.ts:408	request timeout 會中止 fetch 並拋出 temporary timeout 錯誤
 test/unit/twitch-api.test.ts:438	request timeout 會涵蓋收到 headers 後的 response body
 test/unit/twitch-api.test.ts:469	拒絕超過一百萬 bytes 的 response body
@@ -402,6 +407,7 @@ test/unit/twitch-api.test.ts:490	fetch AbortError 分類為 temporary aborted �
 test/unit/twitch-api.test.ts:505	網路錯誤分類為 temporary 且不轉送原始錯誤內容
 test/unit/twitch-api.test.ts:536	無法解析的 JSON 分類為 temporary invalid-response
 test/unit/twitch-api.test.ts:593	%s 時保守拒絕 response schema
+test/unit/twitch-api.test.ts:609	HTTP %s 的 error 與 logger fields 不洩漏 token 或 headers
 test/unit/watchdog-scheduler.test.ts:27	第一輪 live 輸出 online，後續不變不重複輸出，offline 時輸出轉換
 test/unit/watchdog-scheduler.test.ts:85	第一輪全部 offline 不輸出狀態噪音但仍 reconcile 空集合
 test/unit/watchdog-scheduler.test.ts:99	高優先序頻道上線時由 selector 與 reconcile 替換低優先序頻道

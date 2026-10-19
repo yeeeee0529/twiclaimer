@@ -161,13 +161,9 @@ fn prefers_offline_when_duplicate_statuses_conflict() {
     assert_eq!(selected, vec!["second"]);
 }
 
-// 註：舊測試的 it.each 標題屬跨行形式（`it.each(…)(` 之後才換行放標題），
-// 未被 extract-spec.sh 收進 ts-test-titles.tsv；為免 port-coverage 判成未知標題，
-// 以下註解刻意用「原測試 it.each」前綴而不用冒號形式。待依 DEC-010 的補抓作法
-// 修正抽取腳本並重新產生 TSV 後，再改回標準前綴。案例表照抄舊測試：
-// [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]。
+// 舊測試的 it.each 案例表照抄：[0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]。
 
-// 原測試 it.each：maxConcurrentStreams=%s 不是正整數時回傳空陣列（案例：0）
+// 原測試：maxConcurrentStreams=%s 不是正整數時回傳空陣列
 #[test]
 fn max_concurrent_streams_0_returns_empty_array() {
     let configured = channels(&["first"]);
@@ -178,7 +174,7 @@ fn max_concurrent_streams_0_returns_empty_array() {
     assert!(selected.is_empty());
 }
 
-// 原測試 it.each：maxConcurrentStreams=%s 不是正整數時回傳空陣列（案例：-1）
+// 原測試：maxConcurrentStreams=%s 不是正整數時回傳空陣列
 #[test]
 fn max_concurrent_streams_negative_1_returns_empty_array() {
     let configured = channels(&["first"]);
@@ -189,7 +185,7 @@ fn max_concurrent_streams_negative_1_returns_empty_array() {
     assert!(selected.is_empty());
 }
 
-// 原測試 it.each：maxConcurrentStreams=%s 不是正整數時回傳空陣列（案例：1.5）
+// 原測試：maxConcurrentStreams=%s 不是正整數時回傳空陣列
 #[test]
 fn max_concurrent_streams_1_5_returns_empty_array() {
     let configured = channels(&["first"]);
@@ -200,7 +196,7 @@ fn max_concurrent_streams_1_5_returns_empty_array() {
     assert!(selected.is_empty());
 }
 
-// 原測試 it.each：maxConcurrentStreams=%s 不是正整數時回傳空陣列（案例：Number.NaN）
+// 原測試：maxConcurrentStreams=%s 不是正整數時回傳空陣列
 #[test]
 fn max_concurrent_streams_nan_returns_empty_array() {
     let configured = channels(&["first"]);
@@ -211,7 +207,7 @@ fn max_concurrent_streams_nan_returns_empty_array() {
     assert!(selected.is_empty());
 }
 
-// 原測試 it.each：maxConcurrentStreams=%s 不是正整數時回傳空陣列（案例：Number.POSITIVE_INFINITY）
+// 原測試：maxConcurrentStreams=%s 不是正整數時回傳空陣列
 #[test]
 fn max_concurrent_streams_positive_infinity_returns_empty_array() {
     let configured = channels(&["first"]);
