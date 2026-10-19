@@ -1,12 +1,15 @@
 //! launcher 的單元測試：參數組合、暫存目錄、registry、trace 檔與版本解析（S1.3）。
-//! 這批是新寫的單元測試（非移植），只涵蓋純函式與本機可驗證的行為；真的 spawn 留給 e2e。
+//! 這批是新寫的單元測試（非移植），只涵蓋純函式與本機可驗證的行為；
+//! 需要真的 spawn 程序與瀏覽器的測試在 `src/tests/browser_launch.rs`。
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use super::CHROMIUM_ARGS;
 use super::USER_DATA_DIR_PLACEHOLDER;
 use super::{
-    TraceWriter, compose_browser_args, create_temp_dirs, kill_all_registered,
+    DisconnectedState, TraceWriter, compose_browser_args, create_temp_dirs, kill_all_registered,
     parse_browser_version, register_process_group, registered_process_groups, resolve_executable,
     unregister_process_group,
 };
@@ -290,4 +293,42 @@ fn resolve_executable_follows_chrome_path() {
     assert!(resolve_executable().is_err());
 
     unsafe { std::env::remove_var("CHROME_PATH") };
+}
+
+#[test]
+fn disconnected_state_fires_listeners_once() {
+    let state = Arc::new(DisconnectedState::default());
+    let fired = Arc::new(AtomicUsize::new(0));
+    let listener = Arc::clone(&fired);
+    let _cancel = state.on_disconnected(move || {
+        listener.fetch_add(1, Ordering::SeqCst);
+    });
+
+    assert!(!state.is_disconnected(), "一開始未斷線");
+    state.mark_disconnected();
+    state.mark_disconnected();
+    assert_eq!(fired.load(Ordering::SeqCst), 1, "重複標記只觸發一次");
+    assert!(state.is_disconnected());
+
+    // 已斷線後才註冊的 listener 不觸發（Playwright EventEmitter 語意）。
+    let late = Arc::new(AtomicUsize::new(0));
+    let late_listener = Arc::clone(&late);
+    let _late_cancel = state.on_disconnected(move || {
+        late_listener.fetch_add(1, Ordering::SeqCst);
+    });
+    assert_eq!(late.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn disconnected_state_cancel_removes_listener() {
+    let state = Arc::new(DisconnectedState::default());
+    let fired = Arc::new(AtomicUsize::new(0));
+    let listener = Arc::clone(&fired);
+    let cancel = state.on_disconnected(move || {
+        listener.fetch_add(1, Ordering::SeqCst);
+    });
+
+    cancel();
+    state.mark_disconnected();
+    assert_eq!(fired.load(Ordering::SeqCst), 0, "取消後不觸發");
 }

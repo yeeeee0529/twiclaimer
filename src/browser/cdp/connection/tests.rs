@@ -198,7 +198,7 @@ fn spawn_connection() -> (
 ) {
     let (ours, theirs) = tokio::io::duplex(64 * 1024);
     let (reader, writer) = tokio::io::split(ours);
-    let (connection, notices) = Connection::spawn(reader, writer);
+    let (connection, notices) = Connection::spawn(reader, writer, None);
     (connection, notices, theirs)
 }
 

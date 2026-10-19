@@ -1,44 +1,64 @@
-//! CDP launcher：啟動 headless shell、管理 process group 與暫存目錄（§7.3.1、X9）。
+//! CDP launcher：啟動 headless shell、握手與瀏覽器生命週期（§7.3.1、X9）。
 //!
-//! 本檔負責「程序面機制」：
+//! launch 流程（[`BrowserLauncher::launch`]）：解析執行檔 → 建暫存目錄 → 組參數 →
+//! spawn → 建 [`Connection`] → 依錄製順序握手（`Browser.getVersion`、
+//! `Target.setAutoAttach`），整體 180 秒逾時；逾時或任何失敗都整群 `SIGKILL`。
+//! 成功後的 [`LaunchedBrowser`] 提供 close（直接寫 `Browser.close`）、disconnected
+//! 觸發一次與 drop／取消的孤兒防線（§7.3.1）。
+//!
+//! 程序面機制：
 //! - Chromium 參數組合：`doc/spec/chromium-args.txt` 逐字、依序使用，只換 user-data-dir。
 //! - 暫存目錄：profile 與下載目錄都以 `twiclaimer-*` 為前綴（X9），瀏覽器結束後刪除。
 //! - process group：`process_group(0)` + `kill_on_drop(true)`，並登記在全域 registry，
 //!   程序結束前對所有存活的 group 送 `SIGKILL`（§7.3.1、§7.9）。
-//! - `--remote-debugging-pipe`：兩條 `O_CLOEXEC` pipe，Linux 上在 `pre_exec` 內
-//!   `dup2` 到子程序的 fd 3（讀指令）與 fd 4（寫回應），並設定 `PR_SET_PDEATHSIG`（G8）。
+//! - `--remote-debugging-pipe`：兩條 CLOEXEC pipe，在 `pre_exec` 內 `dup2` 到子程序的
+//!   fd 3（讀指令）與 fd 4（寫回應）；fd 撞號時以 `fcntl` 清 `FD_CLOEXEC`（DEC-007）。
+//!   Linux 上另設定 `PR_SET_PDEATHSIG`（G8）。
 //! - CDP trace 檔：`TWICLAIMER_CDP_TRACE`（§7.3.7），未設定時零額外成本。
 //!
-//! S1.3 進行中：真正的 launch 流程（等 `Browser.getVersion`、180 秒逾時、close）之後接上。
-// S1.3 進行中：spawn 相關函式還沒有正式呼叫端，完成後移除。
+//! 以下 API 尚無正式呼叫端，等對應步驟接上後移除 allow：
+//! - `TraceWriter::record_send`／`record_recv`（S1.4，§7.3.7 的 SEND／RECV 紀錄）。
+//! - `BrowserTempDirs::artifacts` 的讀取（S1.4，`downloadPath`）。
+//! - `kill_all_registered`（§7.9，app 結束前的防線）。
+//! - `BrowserLauncher::launch_with`（測試注入假執行檔與較短逾時用）。
+//! - `DisconnectedState::on_disconnected`、`LaunchedBrowser::get_version`／
+//!   `process_id`／`temp_dir_paths`（S1.6 起的 listener 與 G1 e2e）。
+//! - `LaunchedBrowser` 的 session 通知接收端（S1.4 上層消費）。
 #![allow(dead_code)]
 
 use std::fs::OpenOptions;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::sync::{Mutex, OnceLock};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::Duration;
 
 use nix::errno::Errno;
 use nix::sys::signal::{Signal, killpg};
 use nix::unistd::Pid;
+use serde_json::{Value, json};
 use tempfile::TempDir;
 use tokio::net::unix::pipe::{Receiver, Sender};
 use tokio::process::Child;
+use tokio::sync::{mpsc, oneshot, watch};
+
+use super::connection::{CdpError, Connection, SessionNotice};
 
 /// S1.2 從 `$REF` 錄製的 Chromium 參數（逐字、依序使用；`--user-data-dir=<tmp>` 是遮蔽佔位）。
-const CHROMIUM_ARGS: &str = include_str!("../../../doc/spec/chromium-args.txt");
+pub(crate) const CHROMIUM_ARGS: &str = include_str!("../../../doc/spec/chromium-args.txt");
 
 /// 錄製時遮蔽 user-data-dir 的佔位整行。
 const USER_DATA_DIR_PLACEHOLDER: &str = "--user-data-dir=<tmp>";
 
 /// 子程序讀指令的固定 fd（`--remote-debugging-pipe` 的約定）。
-#[cfg(target_os = "linux")]
 const CDP_COMMAND_FD: i32 = 3;
 
 /// 子程序寫回應的固定 fd。
-#[cfg(target_os = "linux")]
 const CDP_RESPONSE_FD: i32 = 4;
+
+/// launch 的整體逾時（§7.3.1：180 秒內沒有握手回應就終止）。
+const LAUNCH_TIMEOUT: Duration = Duration::from_secs(180);
 
 /// launcher 階段的錯誤：訊息格式照 Playwright（§7.3.1）。
 #[derive(Debug)]
@@ -130,7 +150,7 @@ pub(crate) fn create_temp_dirs() -> io::Result<BrowserTempDirs> {
 static REGISTERED_PROCESS_GROUPS: OnceLock<Mutex<Vec<i32>>> = OnceLock::new();
 
 /// registry 本體（測試也會用來檢查登記狀態）。
-fn registered_process_groups() -> &'static Mutex<Vec<i32>> {
+pub(crate) fn registered_process_groups() -> &'static Mutex<Vec<i32>> {
     REGISTERED_PROCESS_GROUPS.get_or_init(|| Mutex::new(Vec::new()))
 }
 
@@ -200,7 +220,8 @@ pub(crate) struct SpawnedBrowser {
 
 /// 以 `--remote-debugging-pipe` 啟動瀏覽器：設定 process group、CDP 管道與輸出傾印。
 ///
-/// macOS 不做 fd 3／4 的 `dup2`（只 Linux 需要），但 pipe 建立與其餘設定在兩個平台都相同。
+/// 兩個平台都在 `pre_exec` 內把 pipe `dup2` 到子程序的 fd 3／4；fd 撞號時以
+/// `fcntl` 清 `FD_CLOEXEC`（DEC-007）。Linux 另外設定 `PR_SET_PDEATHSIG`（G8）。
 pub(crate) fn spawn_browser(
     executable: &Path,
     args: &[String],
@@ -221,7 +242,6 @@ pub(crate) fn spawn_browser(
     let (cmd_read, cmd_write) = create_cloexec_pipe()?;
     let (resp_read, resp_write) = create_cloexec_pipe()?;
 
-    #[cfg(target_os = "linux")]
     {
         use std::os::fd::AsRawFd as _;
         let cmd_read_fd = cmd_read.as_raw_fd();
@@ -283,8 +303,7 @@ where
 /// 把 fd 複製到子程序的固定 fd（fd 3／4），只在 `pre_exec` 內呼叫（async-signal-safe）。
 ///
 /// oldfd 與目標相同時 `dup2` 是 no-op、不會清 CLOEXEC，需改用 `fcntl` 清掉，
-/// 否則 exec 後該 fd 會被 CLOEXEC 關掉，瀏覽器讀不到指令。
-#[cfg(target_os = "linux")]
+/// 否則 exec 後該 fd 會被 CLOEXEC 關掉，瀏覽器讀不到指令（DEC-007）。
 fn dup2_to_fixed_fd(fd: i32, target: i32) -> io::Result<()> {
     let result = if fd == target {
         // 安全性：fcntl 的 F_SETFD 是系統呼叫包裝，async-signal-safe。
@@ -301,7 +320,7 @@ fn dup2_to_fixed_fd(fd: i32, target: i32) -> io::Result<()> {
 }
 
 /// 在子程序內設定 `PR_SET_PDEATHSIG`（SIGKILL）：控制端被 SIGKILL 時瀏覽器一併結束（G8）。
-/// 只在 `pre_exec` 內呼叫（async-signal-safe）。
+/// 只在 `pre_exec` 內呼叫（async-signal-safe）。macOS 沒有對應機制，回傳成功。
 #[cfg(target_os = "linux")]
 fn set_pdeathsig_in_child() -> io::Result<()> {
     // 安全性：prctl 是系統呼叫包裝，async-signal-safe。
@@ -310,6 +329,11 @@ fn set_pdeathsig_in_child() -> io::Result<()> {
     } else {
         Ok(())
     }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn set_pdeathsig_in_child() -> io::Result<()> {
+    Ok(())
 }
 
 /// CDP trace 寫入器（§7.3.7）：`TWICLAIMER_CDP_TRACE` 有設定時寫檔，未設定時為 no-op。
@@ -387,6 +411,351 @@ pub(crate) fn parse_browser_version(product: &str) -> String {
         Some((_product, version)) => version.to_string(),
         None => product.to_string(),
     }
+}
+
+/// 對整個 process group 送 `SIGKILL`（pgid 非正數時不送：`killpg(0)` 會打到自己）。
+pub(crate) fn kill_process_group(pgid: i32) {
+    if pgid > 0 {
+        let _ = killpg(Pid::from_raw(pgid), Signal::SIGKILL);
+    }
+}
+
+/// launch 期間的防線：任何非成功路徑（整體逾時、future 被 drop、握手失敗）離開時，
+/// 把 process group 整群 `SIGKILL`，不留孤兒（§7.3.1）。成功時先 [`LaunchGuard::disarm`]。
+struct LaunchGuard {
+    pgid: i32,
+    armed: bool,
+}
+
+impl LaunchGuard {
+    fn disarm(&mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for LaunchGuard {
+    fn drop(&mut self) {
+        if self.armed {
+            kill_process_group(self.pgid);
+        }
+    }
+}
+
+/// 斷線 listener 的取消函式（對應舊版回傳的 `() => void`，§7.3.5）。
+pub(crate) type CancelListener = Box<dyn Fn() + Send + Sync>;
+
+/// 瀏覽器斷線狀態（§7.3.1：pipe EOF、讀取錯誤或程序結束時觸發一次）。
+#[derive(Default)]
+pub(crate) struct DisconnectedState {
+    disconnected: AtomicBool,
+    /// 註冊的 listener（對應 Playwright 的 `browser.on('disconnected')`，§7.3.5）。
+    listeners: Mutex<Vec<Arc<dyn Fn() + Send + Sync>>>,
+}
+
+impl DisconnectedState {
+    /// 是否已斷線。
+    pub(crate) fn is_disconnected(&self) -> bool {
+        self.disconnected.load(Ordering::SeqCst)
+    }
+
+    /// 註冊 listener，回傳取消函式（§7.3.5）。
+    ///
+    /// 已斷線後才註冊的 listener 不會再觸發（照 Playwright EventEmitter 的語意）。
+    pub(crate) fn on_disconnected(
+        self: &Arc<Self>,
+        listener: impl Fn() + Send + Sync + 'static,
+    ) -> CancelListener {
+        let mut listeners = self
+            .listeners
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let entry: Arc<dyn Fn() + Send + Sync> = Arc::new(listener);
+        listeners.push(Arc::clone(&entry));
+        let state = Arc::clone(self);
+        Box::new(move || {
+            let mut listeners = state
+                .listeners
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            listeners.retain(|registered| !Arc::ptr_eq(registered, &entry));
+        })
+    }
+
+    /// 標記斷線並觸發所有 listener（重複呼叫只觸發一次）。
+    ///
+    /// listener 在鎖外逐一呼叫；listener 內的 panic 被攔下，不影響其他 listener
+    /// 與收尾流程（§7.3.5：listener 的錯誤不得影響生命週期）。
+    pub(crate) fn mark_disconnected(&self) {
+        if self.disconnected.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        let listeners = {
+            let mut guard = self
+                .listeners
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            std::mem::take(&mut *guard)
+        };
+        for listener in listeners {
+            // listener 是外部提供的程式碼：攔下 panic 讓收尾繼續。
+            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| listener()));
+        }
+    }
+}
+
+/// launch 成功後的瀏覽器控制把手（§7.3.1）。
+///
+/// 生命週期：
+/// - [`LaunchedBrowser::close`]：直接寫出 `Browser.close`，等程序結束、暫存目錄刪除後返回；
+///   不設逾時（呼叫端負責逾時）。
+/// - future 被取消或把手被 drop：`SIGKILL` 整個 process group，背景收屍與清理（不留孤兒）。
+/// - pipe EOF、讀取錯誤或程序結束：disconnected 觸發一次；之後的 CDP 指令回
+///   `Target page, context or browser has been closed`。
+pub(crate) struct LaunchedBrowser {
+    connection: Connection,
+    /// attach／detach 通知接收端（S1.4 上層持有並消費）。
+    notices: mpsc::Receiver<SessionNotice>,
+    /// process group id（== 主程序 pid；非正數表示 pid 未取得，等同無防線目標）。
+    pgid: i32,
+    /// 主程序的 pid（e2e 與診斷用）。
+    pid: Option<u32>,
+    /// `Browser.getVersion` 的版本（`browser.version()`）。
+    version: String,
+    /// 收尾完成的訊號：`true` 表示程序已結束、暫存目錄已刪、registry 已解除。
+    finalized: watch::Receiver<bool>,
+    disconnected: Arc<DisconnectedState>,
+    /// 暫存目錄路徑（實體由監看任務持有並在結束後刪除）。
+    profile_path: PathBuf,
+    artifacts_path: PathBuf,
+}
+
+impl LaunchedBrowser {
+    /// 瀏覽器版本（Playwright 的 `browser.version()`）。
+    pub(crate) fn get_version(&self) -> &str {
+        &self.version
+    }
+
+    /// 瀏覽器主程序的 pid（== process group id）。
+    pub(crate) fn process_id(&self) -> Option<u32> {
+        self.pid
+    }
+
+    /// 兩個暫存目錄的路徑（profile、下載；G1 e2e 驗證清理用）。
+    pub(crate) fn temp_dir_paths(&self) -> (&Path, &Path) {
+        (&self.profile_path, &self.artifacts_path)
+    }
+
+    /// 是否已斷線（pipe EOF、讀取錯誤或程序結束）。
+    pub(crate) fn is_disconnected(&self) -> bool {
+        self.disconnected.is_disconnected()
+    }
+
+    /// 註冊斷線 listener，回傳取消函式（§7.3.5）。
+    pub(crate) fn on_disconnected(
+        &self,
+        listener: impl Fn() + Send + Sync + 'static,
+    ) -> CancelListener {
+        self.disconnected.on_disconnected(listener)
+    }
+
+    /// 送出一則 CDP 指令，等回應（§7.3.2）。連線已斷時回 [`CdpError::TargetClosed`]。
+    pub(crate) async fn send_command(
+        &self,
+        session: Option<&str>,
+        method: &str,
+        params: Value,
+    ) -> Result<Value, CdpError> {
+        // 回應接收端被丟棄（連線收尾時清理等待者）視同 TargetClosed。
+        match self
+            .connection
+            .send_command(session, method, params)
+            .await
+            .await
+        {
+            Ok(result) => result,
+            Err(_) => Err(CdpError::TargetClosed),
+        }
+    }
+
+    /// 關閉瀏覽器（§7.3.1）：直接寫出 `Browser.close`（不經 Router 的等待者，照
+    /// Playwright 寫 pipe），等程序結束、暫存目錄刪除、registry 解除後返回。
+    ///
+    /// 不設逾時——逾時由呼叫端負責；future 被取消時由 [`Drop`] 對整個 process group
+    /// 送 `SIGKILL`，背景收屍。
+    pub(crate) async fn close(mut self) {
+        // 程序還在（連線還活著）才寫；連線已斷時寫入也會失敗，只是噪音。
+        if !self.disconnected.is_disconnected() {
+            self.connection.send_unguarded("Browser.close", json!({}));
+        }
+        // 等監看任務收尾完成。連線已斷（EOF）時讀寫 task 已自然收尾。
+        while !*self.finalized.borrow_and_update() {
+            if self.finalized.changed().await.is_err() {
+                // 監看任務已消失（不該發生）：不再等，drop 時仍會 killpg 兜底。
+                break;
+            }
+        }
+    }
+}
+
+impl Drop for LaunchedBrowser {
+    fn drop(&mut self) {
+        // 把手被 drop（含 close() 的 future 被取消）：整個 process group `SIGKILL`；
+        // 收屍、暫存目錄刪除與 registry 解除由監看任務在背景完成（§7.3.1 不留孤兒）。
+        kill_process_group(self.pgid);
+    }
+}
+
+/// 瀏覽器啟動器（D1：只支援 Chromium headless shell；`headless` 等選項由錄製參數固定）。
+#[derive(Default)]
+pub(crate) struct BrowserLauncher;
+
+impl BrowserLauncher {
+    pub(crate) fn new() -> Self {
+        BrowserLauncher
+    }
+
+    /// 以 `CHROME_PATH` 啟動瀏覽器並完成握手（§7.3.1）。
+    pub(crate) async fn launch(&self) -> Result<LaunchedBrowser, LaunchError> {
+        match resolve_executable() {
+            Ok(executable) => self.launch_with(executable, LAUNCH_TIMEOUT).await,
+            Err(error) => Err(error),
+        }
+    }
+
+    /// 以指定執行檔與逾時啟動（測試注入假執行檔與較短逾時用）。
+    pub(crate) async fn launch_with(
+        &self,
+        executable: PathBuf,
+        timeout: Duration,
+    ) -> Result<LaunchedBrowser, LaunchError> {
+        match tokio::time::timeout(timeout, self.launch_attempt(executable)).await {
+            Ok(result) => result,
+            Err(_) => Err(LaunchError::new(format!(
+                "browserType.launch: Timeout {}ms exceeded.",
+                timeout.as_millis()
+            ))),
+        }
+    }
+
+    /// 啟動的一次嘗試：暫存目錄、spawn、接線與握手。
+    async fn launch_attempt(&self, executable: PathBuf) -> Result<LaunchedBrowser, LaunchError> {
+        // trace 的第一行要在啟動時最先寫（§7.3.7；SEND／RECV 紀錄 S1.4 接上）。
+        let mut trace = TraceWriter::from_env();
+        let temp_dirs = create_temp_dirs()?;
+        let args = compose_browser_args(CHROMIUM_ARGS, temp_dirs.profile.path());
+        trace.write_launching(&executable, &args);
+
+        let spawned = spawn_browser(&executable, &args)?;
+        let pid = spawned.child.id();
+        let pgid = pid.map(|pid| pid as i32).unwrap_or(0);
+        let profile_path = temp_dirs.profile.path().to_path_buf();
+        let artifacts_path = temp_dirs.artifacts.path().to_path_buf();
+
+        let (finalized_tx, finalized) = watch::channel(false);
+        let disconnected = Arc::new(DisconnectedState::default());
+
+        // 連線接線：讀瀏覽器的回應與事件、寫指令（§7.3.1 的兩條 pipe）。
+        let (read_end_tx, read_end_rx) = oneshot::channel();
+        let (connection, notices) = Connection::spawn(
+            spawned.response_receiver,
+            spawned.command_sender,
+            Some(read_end_tx),
+        );
+        // pipe EOF／讀取錯誤時：連線結束——整群 SIGKILL（群組多半已死；讀取錯誤時
+        // 瀏覽器可能還活著，不能留下孤兒），收屍與暫存目錄刪除由監看任務完成，
+        // 並觸發一次 disconnected（§7.3.1）。
+        {
+            let disconnected = Arc::clone(&disconnected);
+            tokio::spawn(async move {
+                if read_end_rx.await.is_ok() {
+                    kill_process_group(pgid);
+                    disconnected.mark_disconnected();
+                }
+            });
+        }
+        // 背景監看：程序結束時收屍、觸發 disconnected、刪暫存目錄、解除登記。
+        tokio::spawn(monitor_browser_exit(
+            spawned.child,
+            pgid,
+            temp_dirs,
+            finalized_tx,
+            Arc::clone(&disconnected),
+        ));
+
+        // 逾時防線：任何非成功路徑（含未來被 drop／逾時取消）都 SIGKILL process group。
+        let mut guard = LaunchGuard { pgid, armed: true };
+
+        // 握手（§7.3.1 錄製順序）：先 `Browser.getVersion`，再 `Target.setAutoAttach`。
+        let version_reply = connection
+            .send_command(None, "Browser.getVersion", json!({}))
+            .await;
+        let version_value = await_handshake_reply(version_reply).await?;
+        let product = version_value
+            .get("product")
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                LaunchError::new(
+                    "browserType.launch: Browser.getVersion response is missing 'product'",
+                )
+            })?;
+        let auto_attach_reply = connection
+            .send_command(
+                None,
+                "Target.setAutoAttach",
+                json!({"autoAttach": true, "flatten": true, "waitForDebuggerOnStart": true}),
+            )
+            .await;
+        await_handshake_reply(auto_attach_reply).await?;
+
+        guard.disarm();
+        Ok(LaunchedBrowser {
+            connection,
+            notices,
+            pgid,
+            pid,
+            version: parse_browser_version(product),
+            finalized,
+            disconnected,
+            profile_path,
+            artifacts_path,
+        })
+    }
+}
+
+/// 握手失敗（CDP 錯誤或連線結束）轉成 launch 錯誤。
+fn handshake_failure(error: CdpError) -> LaunchError {
+    LaunchError::new(format!("browserType.launch: {}", error.message()))
+}
+
+/// 等一則握手回應：接收端失敗（連線收尾時清理等待者）視同連線結束。
+async fn await_handshake_reply(
+    reply: oneshot::Receiver<Result<Value, CdpError>>,
+) -> Result<Value, LaunchError> {
+    match reply.await {
+        Ok(Ok(value)) => Ok(value),
+        Ok(Err(error)) => Err(handshake_failure(error)),
+        Err(_) => Err(handshake_failure(CdpError::TargetClosed)),
+    }
+}
+
+/// 背景監看瀏覽器程序：結束時收屍、觸發 disconnected、刪暫存目錄、解除 registry 登記，
+/// 最後才送出收尾完成的訊號（[`LaunchedBrowser::close`] 等的就是這個）。
+async fn monitor_browser_exit(
+    mut child: Child,
+    pgid: i32,
+    temp_dirs: BrowserTempDirs,
+    finalized: watch::Sender<bool>,
+    disconnected: Arc<DisconnectedState>,
+) {
+    // 收屍（kill_on_drop 的 drop 路徑之外，正常結束也要 wait 避免 zombie）。
+    let _ = child.wait().await;
+    // 先觸發 disconnected（§7.3.1：程序結束時觸發一次；S1.8 要求 1 秒內）。
+    disconnected.mark_disconnected();
+    // 瀏覽器結束後刪除暫存目錄（§7.3.1、X9）。
+    drop(temp_dirs);
+    unregister_process_group(pgid);
+    // 最後才通知收尾完成：close() 返回時清理已全部完成。
+    let _ = finalized.send(true);
 }
 
 #[cfg(test)]
