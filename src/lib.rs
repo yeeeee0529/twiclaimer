@@ -1,2 +1,3 @@
-//! `browser` 模組：對應舊版 `src/browser`（§4.2）。
+//! twiclaimer：Twitch Watchdog 的 Rust 版（S1.1 骨架，模組依 §4.2 逐步加入）。
 pub mod browser;
+pub mod logging;
