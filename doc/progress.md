@@ -21,7 +21,7 @@
 | S0.1–S0.7 | 未開始 | | | | |
 | S1.1 | 完成 | 2026-10-19 | 0.2 天 | `scripts/check.sh` 全綠（fmt／clippy／test、npm test 7 個、port-coverage 8 已處置／0 未知）；`extract-spec.sh` 產出 397 列測試標題與 149 個日誌事件 | S1.1 |
 | S1.2 | 完成 | 2026-10-19 | 0.2 天 | `pw-errors.jsonl` 33 列；9 組錄製均有 `.seq` 與 `.diag.jsonl`；`chromium-args.txt` 45 個參數含 `--remote-debugging-pipe`；二次錄製 `git diff` 零差異；`src/browser/js/` 6 個頁面內 JS 逐字複製並通過 Node 語法檢查 | S1.2 |
-| S1.3 | 進行中 | | 0.1 天 | transport 框架（NUL 分隔解碼／編碼）完成，6 個單元測試過；`check.sh` 全綠。尚缺：connection／launcher、pipe 接線、launcher 測試移植、G1／G8 | |
+| S1.3 | 進行中 | | 0.2 天 | transport 框架（6 測試）＋ connection 路由（13 測試：id 遞增、回應／錯誤解析、session 結束取消指令、診斷事件滿溢丟棄計數、生命週期事件佇列）全過；launcher 程序面機制由子代理並行實作中。尚缺：pipe 接線、launch 握手、launcher e2e、G1／G8 | |
 | S1.4 | 未開始 | | | | |
 | S1.5 | 未開始 | | | | |
 | S1.6 | 未開始 | | | | |
