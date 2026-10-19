@@ -1,6 +1,6 @@
 # 進度
 
-- 目前步驟：S1.4（`wt/s14-context`，接手代理進行中）＋ S2.3 寫回（`wt/s23-writeback`）；S2.1–S2.6 全部完成
+- 目前步驟：S1.4（`wt/s14-context`，接手代理進行中）；S2 階段（S2.1–S2.6）全部完成
 - DEC-013 統一已完成（`c187b42`）：`sessions/recovery.rs` 與 `app/resource_guard.rs` 改用 `config::model`／`config::thresholds`（thresholds 的 bytes 以 u128 對應 JS bigint，使用處經 u128::from 無損轉換）；`CgroupSnapshot`／`CgroupMemoryEvents` 仍在 `app/resource_guard.rs`，等 S3.2 reader 落地時移過去
 - 觀察到的既有不穩定：`tests::browser_launch::cancelling_close_kills_a_browser_that_ignores_browser_close`（S1.3 假瀏覽器測試，非 ignore）在全套平行跑時失敗過一次（process group 收屍時序），單跑與後續全跑皆通過；持續觀察，若再現就檢查收屍等待的確定性
 - 卡住的項目：無
@@ -32,7 +32,7 @@
 | S1 關卡 | 未開始 | | | | |
 | S2.1 | 完成 | 2026-10-19 | 0.3 天 | 消毒層（13）＋ Logger 本體（11）＋ `browser-diagnostics` 純函式（`extract_graph_ql_operation_names`／`decide_*_level`／`truncate_text`，10 個舊測試；另 6 個已由 channel_url 處置）＋ `safe_logging.rs`（舊碼無專屬測試，補測 3 個）。port-coverage strict 35/35。本步驟全部完成 | 5213e0a |
 | S2.2 | 完成 | 2026-10-19 | 0.5 天 | `parse_yaml`（13/13 golden）＋`ConfigLoader`（欄位驗證順序／訊息、`${VAR}`、15 個 env 覆寫、X1 browser.engine、X2 headless）＋`model.rs`（f64 忠實 JS number、`to_json()`）＋thresholds（5）＋**9/9 config golden**（fingerprint 留 S2.6）。config.test.ts 24＋11 it.each＋thresholds 5 全移植（X2 檢查放 buildConfig 最後以守住原驗證順序）。寫回屬 S2.3 | 0ead197 |
-| S2.3 | 未開始 | | | | |
+| S2.3 | 完成 | 2026-10-19 | 0.2 天 | 位元組範圍取代引擎（saphyr Marker 是字元索引非位元組——建字元→位元組對照表；flow/block span、隱式空值、anchor 名稱掃描、CRLF／BOM 保留）＋`YamlRuntimeConfigManager`（Mutex 串行、驗證→persist→記憶體→target）；**22/22 golden**＋4/4 舊測試。`ConfigValidationError` 已統一回 `config::errors`（暫定義從 writeback.rs 移除） | 
 | S2.4 | 完成 | 2026-10-19 | 0.1 天 | `FileCredentialValidator`＋`StorageState` 解析＋四個專用錯誤（訊息逐字）；10 個舊測試全移植（port-coverage strict 10/10）；fixture 以 `include_str!` 嵌入記憶體、不碰檔案系統；`js_trim` 照 JS 字元集 | 
 | S2.5 | 完成 | 2026-10-19 | 0.3 天 | `channel_url.rs`（18）＋選台器（16）＋復原政策（7/7）＋resource guard 政策（12/12）＋safe-logging 補測（3）全部完成；port-coverage strict 全過。config 形狀的型別（BrowserRecoveryConfig／ResourceGuardPolicyConfig 等）暫在使用端定義，等 S2.2 loader 合併後統一 | 5213e0a |
 | S2.6 | 完成 | 2026-10-19 | 0.1 天 | `create_safe_config_fingerprint`（SHA-256 hex、JSON.stringify 逐字重現：鍵序照建立順序、數字用 js_number_to_string）＋`create_runtime_startup_diagnostics`；3 個舊測試全移植（fingerprint 與舊版 TS 實作逐字相同）。golden c01/c02/c03/c05/c06 已加 fingerprint 比對（全相符）；c04/c07 錯誤案例、c08/c09 X1/X2 不比 | 
