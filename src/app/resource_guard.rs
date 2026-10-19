@@ -3,17 +3,26 @@
 //! RuntimeResourceMonitor（S3.2 移植）。
 //!
 //! 取捨：
+//! - `ResourceGuardEffectiveThresholds` 與轉換函式 `mibToBytes`／
+//!   `bytesToMibNumber` 改用 config 模組的正式移植（DEC-013 的暫定同形狀定義
+//!   已移除）。`ResourceGuardPolicyConfig` 是舊版
+//!   `Pick<ResourceGuardConfig, …> & { effective }` 的別名型別，保留本地
+//!   struct（欄位照來源型別，一律 f64），由 `From<&ResourceGuardConfig>` 建構。
+//!   秒數欄位是 f64，使用處以 `秒數 * 1_000.0` 轉成 u64 毫秒：時間戳是整數
+//!   毫秒，`整數差 <= trunc(seconds * 1000)` 與舊版浮點比較等價（`as u64`
+//!   對負值／NaN 飽和為 0；設定驗證保證為正的有限數）。
 //! - `CgroupSnapshot`／`CgroupMemoryEvents` 屬於舊版 `app/CgroupV2Reader.ts`，
-//!   reader 本體在 S3.2 移植；此處定義政策可見的欄位子集。
-//! - `ResourceGuardPolicyConfig`／`ResourceGuardEffectiveThresholds` 與轉換函式
-//!   `bytesToMibNumber`／`mibToBytes` 屬於舊版 `config/resourceGuardThresholds.ts`，
-//!   config 層尚未移植（S2.3），先在此處定義同形狀的 `pub(crate)` 型別。
+//!   reader 本體在 S3.2 移植；此處保留政策可見的欄位子集，等 S3.2 移植
+//!   reader 時移過去。
 //! - 時鐘以 [`GuardClock`] 注入（對應舊版 options 的 `now`，預設
 //!   `performance.now()`）；舊測試注入固定／可寫入時鐘，不等真實時間。
 #![allow(dead_code)]
 
 use std::sync::OnceLock;
 use std::time::Instant;
+
+use crate::config::model::{ResourceGuardConfig, ResourceGuardEffectiveThresholds};
+use crate::config::thresholds::{bytes_to_mib_number, mib_to_bytes};
 
 /// 舊版 `CgroupMemoryEvents`（`app/CgroupV2Reader.ts`）：memory.events 計數器
 /// （JS bigint 以 u64 呈現，cgroup 計數不會超出）。
@@ -35,32 +44,40 @@ pub(crate) struct CgroupSnapshot {
     pub events: CgroupMemoryEvents,
 }
 
-/// 舊版 `ResourceGuardEffectiveThresholds`（`config/AppConfig.ts`）：隨串流數
-/// 縮放的絕對門檻（binary MiB；JS number 以 f64 呈現）。
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) struct ResourceGuardEffectiveThresholds {
-    pub max_concurrent_streams: u32,
-    pub warning_memory_mib: f64,
-    pub warning_reset_memory_mib: f64,
-    pub browser_recycle_memory_mib: f64,
-    pub emergency_memory_mib: f64,
-    pub post_recycle_target_memory_mib: f64,
-}
-
 /// 舊版 `ResourceGuardPolicyConfig`（`config/resourceGuardThresholds.ts` 的
-/// `Pick<…> & { effective }` 別名）。
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// `Pick<…> & { effective }` 別名）：欄位照來源 `ResourceGuardConfig` 的型別
+/// （f64 照 JS number），`effective` 重用 config 模組的縮放結果。
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ResourceGuardPolicyConfig {
-    pub sample_interval_seconds: u64,
-    pub startup_rate_grace_seconds: u64,
-    pub browser_recycle_consecutive_samples: u64,
+    pub sample_interval_seconds: f64,
+    pub startup_rate_grace_seconds: f64,
+    pub browser_recycle_consecutive_samples: f64,
     pub emergency_swap_mib: f64,
     pub fast_growth_mib: f64,
-    pub fast_growth_window_seconds: u64,
-    pub post_browser_restart_rate_grace_seconds: u64,
-    pub post_recycle_observation_seconds: u64,
+    pub fast_growth_window_seconds: f64,
+    pub post_browser_restart_rate_grace_seconds: f64,
+    pub post_recycle_observation_seconds: f64,
     pub post_recycle_minimum_drop_mib: f64,
     pub effective: ResourceGuardEffectiveThresholds,
+}
+
+// 舊版的別名型別可直接由完整 `ResourceGuardConfig` 取值（欄位同名）：供未來的
+// 呼叫端（S3.2 的 monitor 等）建構政策設定。
+impl From<&ResourceGuardConfig> for ResourceGuardPolicyConfig {
+    fn from(config: &ResourceGuardConfig) -> Self {
+        Self {
+            sample_interval_seconds: config.sample_interval_seconds,
+            startup_rate_grace_seconds: config.startup_rate_grace_seconds,
+            browser_recycle_consecutive_samples: config.browser_recycle_consecutive_samples,
+            emergency_swap_mib: config.emergency_swap_mib,
+            fast_growth_mib: config.fast_growth_mib,
+            fast_growth_window_seconds: config.fast_growth_window_seconds,
+            post_browser_restart_rate_grace_seconds: config.post_browser_restart_rate_grace_seconds,
+            post_recycle_observation_seconds: config.post_recycle_observation_seconds,
+            post_recycle_minimum_drop_mib: config.post_recycle_minimum_drop_mib,
+            effective: config.effective.clone(),
+        }
+    }
 }
 
 /// 對應舊版 `ResourceGuardPolicyOptions`；`now: None` 用單調時鐘。
@@ -154,7 +171,8 @@ impl ResourceGuardPolicy {
     pub(crate) fn begin_recycle_observation(&mut self, memory_before_bytes: u64) {
         self.recycle_observation = Some(RecycleObservation {
             memory_before_bytes,
-            deadline_ms: (self.now)() + self.config.post_recycle_observation_seconds * 1_000,
+            deadline_ms: (self.now)()
+                + (self.config.post_recycle_observation_seconds * 1_000.0) as u64,
         });
         self.consecutive_high_samples = 0;
         // 舊版註解：Browser refill after recycle must not be misclassified as fast growth.
@@ -172,7 +190,7 @@ impl ResourceGuardPolicy {
     pub(crate) fn note_browser_restart(&mut self) {
         self.sample_history.clear();
         self.consecutive_high_samples = 0;
-        let grace_ms = self.config.post_browser_restart_rate_grace_seconds * 1_000;
+        let grace_ms = (self.config.post_browser_restart_rate_grace_seconds * 1_000.0) as u64;
         if grace_ms == 0 {
             self.rate_growth_suppressed_until_ms = 0;
             return;
@@ -242,17 +260,16 @@ impl ResourceGuardPolicy {
     ) -> Option<ResourceGuardDecision> {
         // 舊版註解：Always advance event counters first so deltas stay accurate.
         let event_emergency = self.evaluate_event_deltas(snapshot);
-        let effective = self.config.effective;
-        let memory_mib = bytes_to_mib_number(snapshot.memory_current_bytes);
+        let memory_mib = bytes_to_mib_number(u128::from(snapshot.memory_current_bytes));
 
-        if memory_mib >= effective.emergency_memory_mib {
+        if memory_mib >= self.config.effective.emergency_memory_mib {
             return Some(ResourceGuardDecision::RestartContainer {
                 reason: "emergency_memory",
             });
         }
 
         if let Some(swap_current_bytes) = snapshot.swap_current_bytes
-            && bytes_to_mib_number(swap_current_bytes) >= self.config.emergency_swap_mib
+            && bytes_to_mib_number(u128::from(swap_current_bytes)) >= self.config.emergency_swap_mib
         {
             return Some(ResourceGuardDecision::RestartContainer {
                 reason: "emergency_swap",
@@ -279,7 +296,7 @@ impl ResourceGuardPolicy {
     /// 對應舊版私有 `shouldIgnoreFastGrowth`：啟動寬限期內、或 browser restart
     /// 後的 rate 寬限期內，一律忽略成長速率。
     fn should_ignore_fast_growth(&self, snapshot: &CgroupSnapshot) -> bool {
-        let startup_grace_ms = self.config.startup_rate_grace_seconds * 1_000;
+        let startup_grace_ms = (self.config.startup_rate_grace_seconds * 1_000.0) as u64;
         let past_startup_grace = self.started_at_ms.is_some_and(|started_at_ms| {
             snapshot
                 .sampled_at_monotonic_ms
@@ -340,16 +357,16 @@ impl ResourceGuardPolicy {
         snapshot: &CgroupSnapshot,
     ) -> Option<ResourceGuardDecision> {
         let observation = self.recycle_observation?;
-        let effective = self.config.effective;
         let memory = snapshot.memory_current_bytes;
-        let target_bytes = mib_to_bytes(effective.post_recycle_target_memory_mib);
-        let recycle_bytes = mib_to_bytes(effective.browser_recycle_memory_mib);
-        // drop 可為負（refill 讓 memory 超過 before），以 i64 呈現 JS bigint 的正負差。
-        let drop_bytes = observation.memory_before_bytes as i64 - memory as i64;
-        let min_drop = mib_to_bytes(self.config.post_recycle_minimum_drop_mib) as i64;
+        let target_bytes = mib_to_bytes(self.config.effective.post_recycle_target_memory_mib);
+        let recycle_bytes = mib_to_bytes(self.config.effective.browser_recycle_memory_mib);
+        // drop 可為負（refill 讓 memory 超過 before），以 i128 呈現 JS bigint 的
+        // 正負差（bytes 照 config::thresholds 以 u128 對應 bigint）。
+        let drop_bytes = i128::from(observation.memory_before_bytes) - i128::from(memory);
+        let min_drop = mib_to_bytes(self.config.post_recycle_minimum_drop_mib) as i128;
 
-        let reached_target = memory < target_bytes;
-        let sufficient_drop = drop_bytes >= min_drop && memory < recycle_bytes;
+        let reached_target = u128::from(memory) < target_bytes;
+        let sufficient_drop = drop_bytes >= min_drop && u128::from(memory) < recycle_bytes;
 
         if reached_target || sufficient_drop {
             self.recycle_observation = None;
@@ -371,14 +388,15 @@ impl ResourceGuardPolicy {
     /// 對應舊版私有 `evaluateRecycle`。
     fn evaluate_recycle(&mut self, snapshot: &CgroupSnapshot) -> Option<ResourceGuardDecision> {
         let recycle_bytes = mib_to_bytes(self.config.effective.browser_recycle_memory_mib);
-        if snapshot.memory_current_bytes >= recycle_bytes {
+        if u128::from(snapshot.memory_current_bytes) >= recycle_bytes {
             self.consecutive_high_samples += 1;
         } else {
             self.consecutive_high_samples = 0;
             return None;
         }
 
-        if self.consecutive_high_samples >= self.config.browser_recycle_consecutive_samples {
+        // 連續計數與 threshold 照舊版的浮點 `>=`（threshold 是 number）。
+        if self.consecutive_high_samples as f64 >= self.config.browser_recycle_consecutive_samples {
             self.consecutive_high_samples = 0;
             return Some(ResourceGuardDecision::RecycleBrowser {
                 reason: "sustained_high_memory",
@@ -393,7 +411,7 @@ impl ResourceGuardPolicy {
         let warning_bytes = mib_to_bytes(self.config.effective.warning_memory_mib);
         let reset_bytes = mib_to_bytes(self.config.effective.warning_reset_memory_mib);
 
-        if snapshot.memory_current_bytes >= warning_bytes {
+        if u128::from(snapshot.memory_current_bytes) >= warning_bytes {
             if !self.warning_latched {
                 self.warning_latched = true;
                 return Some(ResourceGuardDecision::Warn {
@@ -403,7 +421,7 @@ impl ResourceGuardPolicy {
             return None;
         }
 
-        if snapshot.memory_current_bytes < reset_bytes {
+        if u128::from(snapshot.memory_current_bytes) < reset_bytes {
             self.warning_latched = false;
         }
         None
@@ -414,11 +432,11 @@ impl ResourceGuardPolicy {
     /// 水線附近。
     fn has_fast_growth(&self, snapshot: &CgroupSnapshot) -> bool {
         let min_absolute_bytes = mib_to_bytes(self.config.effective.warning_memory_mib);
-        if snapshot.memory_current_bytes < min_absolute_bytes {
+        if u128::from(snapshot.memory_current_bytes) < min_absolute_bytes {
             return false;
         }
 
-        let window_ms = self.config.fast_growth_window_seconds * 1_000;
+        let window_ms = (self.config.fast_growth_window_seconds * 1_000.0) as u64;
         let growth_bytes = mib_to_bytes(self.config.fast_growth_mib);
         let now_ms = snapshot.sampled_at_monotonic_ms;
         let oldest_allowed = now_ms.saturating_sub(window_ms);
@@ -431,7 +449,8 @@ impl ResourceGuardPolicy {
             return false;
         };
 
-        snapshot.memory_current_bytes >= baseline.memory_current_bytes.saturating_add(growth_bytes)
+        u128::from(snapshot.memory_current_bytes)
+            >= u128::from(baseline.memory_current_bytes).saturating_add(growth_bytes)
     }
 
     /// 對應舊版私有 `pushSample`。
@@ -442,37 +461,16 @@ impl ResourceGuardPolicy {
         });
 
         // 舊版註解：Keep a bounded window slightly larger than the growth window.
-        let retain_ms = self
+        // 秒數換算照舊版的 f64 算式後再轉整數毫秒。
+        let retain_ms = (self
             .config
             .fast_growth_window_seconds
             .max(self.config.sample_interval_seconds)
-            * 1_000
-            + self.config.sample_interval_seconds * 1_000 * 2;
+            * 1_000.0
+            + self.config.sample_interval_seconds * 1_000.0 * 2.0) as u64;
         let cutoff = snapshot.sampled_at_monotonic_ms.saturating_sub(retain_ms);
         self.sample_history.retain(|sample| sample.at_ms >= cutoff);
     }
-}
-
-/// 舊版 `MIB`（`config/resourceGuardThresholds.ts`）。
-const MIB: u64 = 1_048_576;
-
-/// 舊版 `Number.MAX_SAFE_INTEGER`（`bytesToMibNumber` 的分界）。
-const MAX_SAFE_INTEGER: u64 = (1 << 53) - 1;
-
-/// 舊版 `mibToBytes`：MiB → 位元組。JS 的 `BigInt(mib)` 對小數無條件捨去、
-/// 負數丟例外；u64 轉換同樣捨去，負數輸入照 u64 的飽和語意歸零（實際設定
-/// 不會出現）。
-pub(crate) fn mib_to_bytes(mib: f64) -> u64 {
-    (mib as u64).saturating_mul(MIB)
-}
-
-/// 舊版 `bytesToMibNumber`：位元組 → MiB（f64 對應 JS number；超過安全整數時
-/// 照舊版先做整數除法再轉 number）。
-pub(crate) fn bytes_to_mib_number(bytes: u64) -> f64 {
-    if bytes > MAX_SAFE_INTEGER {
-        return (bytes / MIB) as f64;
-    }
-    bytes as f64 / MIB as f64
 }
 
 /// 舊版預設 `performance.now()`：單調毫秒（以程序內第一次呼叫為原點，僅供相對

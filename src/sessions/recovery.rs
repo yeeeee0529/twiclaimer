@@ -5,34 +5,17 @@
 //! （S3.x 的 SessionManager）。時鐘以 [`RecoveryClock`] 注入（對應舊版 options
 //! 的 `now`，預設 `Date.now`），單元測試注入固定時鐘、不等真實時間。
 //!
-//! 取捨：`BrowserRecoveryConfig`／`BrowserSessionStartConfig` 屬於舊版
-//! `config/AppConfig.ts`，該層尚未移植（S2.3 的 ConfigLoader／model），此處先
-//! 定義同形狀的 `pub(crate)` 型別，待 config 模組落地後改為重用。
+//! `BrowserRecoveryConfig`／`BrowserSessionStartConfig` 重用 config 模組的正式
+//! 型別（DEC-013 的暫定同形狀定義已移除）。秒數欄位是 f64（照舊版 JS number）；
+//! 使用處以 `秒數 * 1_000.0` 轉成 u64 毫秒——時間戳是整數毫秒，故
+//! `整數差 <= trunc(seconds * 1000)` 與舊版浮點比較 `<= seconds * 1000` 等價
+//! （`as u64` 對負值／NaN 飽和為 0；設定驗證保證為正的有限數）。
 #![allow(dead_code)]
 
 use std::collections::{HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// 舊版 `BrowserRecoveryConfig`（`config/AppConfig.ts`）。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct BrowserRecoveryConfig {
-    pub page_crash_backoff_seconds: Vec<u64>,
-    pub channel_crash_window_seconds: u64,
-    pub channel_quarantine_threshold: usize,
-    pub channel_quarantine_seconds: u64,
-    pub stable_reset_seconds: u64,
-    pub multi_channel_crash_window_seconds: u64,
-    pub multi_channel_crash_threshold: usize,
-    pub browser_failure_window_seconds: u64,
-    pub browser_failure_container_threshold: usize,
-}
-
-/// 舊版 `BrowserSessionStartConfig`（`config/AppConfig.ts`）。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct BrowserSessionStartConfig {
-    pub failure_backoff_seconds: Vec<u64>,
-    pub maximum_cooldown_seconds: u64,
-}
+use crate::config::model::{BrowserRecoveryConfig, BrowserSessionStartConfig};
 
 /// 舊版 options 的 `now: () => number`：回傳 epoch 毫秒（預設 [`default_now_ms`]）。
 pub(crate) type RecoveryClock = Box<dyn Fn() -> u64 + Send + Sync>;
@@ -182,16 +165,18 @@ impl ChannelRecoveryPolicy {
         let state = self.states.entry(key.clone()).or_default();
         state.stable_since_ms = None;
         state.consecutive_page_crashes += 1;
-        let crash_window_ms = self.options.recovery.channel_crash_window_seconds * 1_000;
+        let crash_window_ms = (self.options.recovery.channel_crash_window_seconds * 1_000.0) as u64;
         state
             .page_crash_timestamps_ms
             .retain(|&timestamp_ms| now_ms.saturating_sub(timestamp_ms) <= crash_window_ms);
         state.page_crash_timestamps_ms.push(now_ms);
 
-        if state.page_crash_timestamps_ms.len()
+        // 門檻照舊版的浮點 `>=`（計數與 threshold 都是 number）。
+        if state.page_crash_timestamps_ms.len() as f64
             >= self.options.recovery.channel_quarantine_threshold
         {
-            let retry_at_ms = now_ms + self.options.recovery.channel_quarantine_seconds * 1_000;
+            let retry_at_ms =
+                now_ms + (self.options.recovery.channel_quarantine_seconds * 1_000.0) as u64;
             state.quarantined_until_ms = Some(retry_at_ms);
             state.next_retry_at_ms = None;
             return PageCrashRecoveryDecision::Quarantined {
@@ -231,7 +216,7 @@ impl ChannelRecoveryPolicy {
             .get(index)
             .copied()
             .unwrap_or(maximum_cooldown_seconds);
-        let retry_at_ms = now_ms + backoff_seconds.min(maximum_cooldown_seconds) * 1_000;
+        let retry_at_ms = now_ms + (backoff_seconds.min(maximum_cooldown_seconds) * 1_000.0) as u64;
         state.next_retry_at_ms = Some(retry_at_ms);
         StartFailureRecoveryDecision {
             retry_at_ms,
@@ -315,7 +300,7 @@ impl ChannelRecoveryPolicy {
             return;
         };
         if now_ms.saturating_sub(stable_since_ms)
-            < self.options.recovery.stable_reset_seconds * 1_000
+            < (self.options.recovery.stable_reset_seconds * 1_000.0) as u64
         {
             return;
         }
@@ -334,15 +319,16 @@ impl ChannelRecoveryPolicy {
 
 /// 對應舊版私有 `pageCrashBackoffMs`：以連續 crash 數取 backoff 陣列第 N 項
 /// （超過長度取最後一項）。舊版空陣列時 index 為 -1、乘 1_000 得 NaN（無效
-/// 設定）；Rust 的時間以 u64 呈現，空陣列以 0 秒對應，避免時間失去界域。
-fn page_crash_backoff_ms(backoffs: &[u64], consecutive_page_crashes: u32) -> u64 {
+/// 設定）；Rust 的時間以 u64 呈現，空陣列以 0 秒對應，避免時間失去界域
+/// （DEC-013 有註明此取捨）。
+fn page_crash_backoff_ms(backoffs: &[f64], consecutive_page_crashes: u32) -> u64 {
     if backoffs.is_empty() {
         return 0;
     }
     let index = (consecutive_page_crashes as usize)
         .saturating_sub(1)
         .min(backoffs.len() - 1);
-    backoffs[index] * 1_000
+    (backoffs[index] * 1_000.0) as u64
 }
 
 /// 對應舊版 `normalizeRecoveryChannel`：狀態 key 不區分大小寫。

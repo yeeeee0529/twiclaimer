@@ -14,23 +14,23 @@ use super::{
 /// 數值照抄）。
 fn create_default_browser_recovery() -> BrowserRecoveryConfig {
     BrowserRecoveryConfig {
-        page_crash_backoff_seconds: vec![30, 60, 120],
-        channel_crash_window_seconds: 600,
-        channel_quarantine_threshold: 4,
-        channel_quarantine_seconds: 900,
-        stable_reset_seconds: 1_800,
-        multi_channel_crash_window_seconds: 15,
-        multi_channel_crash_threshold: 2,
-        browser_failure_window_seconds: 600,
-        browser_failure_container_threshold: 3,
+        page_crash_backoff_seconds: vec![30.0, 60.0, 120.0],
+        channel_crash_window_seconds: 600.0,
+        channel_quarantine_threshold: 4.0,
+        channel_quarantine_seconds: 900.0,
+        stable_reset_seconds: 1_800.0,
+        multi_channel_crash_window_seconds: 15.0,
+        multi_channel_crash_threshold: 2.0,
+        browser_failure_window_seconds: 600.0,
+        browser_failure_container_threshold: 3.0,
     }
 }
 
 /// 舊測試 helper `createDefaultBrowserSessionStart`（數值照抄）。
 fn create_default_browser_session_start() -> BrowserSessionStartConfig {
     BrowserSessionStartConfig {
-        failure_backoff_seconds: vec![30, 60, 120],
-        maximum_cooldown_seconds: 900,
+        failure_backoff_seconds: vec![30.0, 60.0, 120.0],
+        maximum_cooldown_seconds: 900.0,
     }
 }
 

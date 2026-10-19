@@ -25,8 +25,10 @@ fn snapshot_with(
 ) -> CgroupSnapshot {
     CgroupSnapshot {
         sampled_at_monotonic_ms: at_ms,
-        memory_current_bytes: mib_to_bytes(memory_mib as f64),
-        swap_current_bytes: swap_mib.map(|swap_mib| mib_to_bytes(swap_mib as f64)),
+        // mib_to_bytes 回 u128（照 config::thresholds 的 bigint 語意）；欄位以
+        // u64 呈現，測試值皆在 u64 範圍內。
+        memory_current_bytes: mib_to_bytes(memory_mib as f64) as u64,
+        swap_current_bytes: swap_mib.map(|swap_mib| mib_to_bytes(swap_mib as f64) as u64),
         events,
     }
 }
@@ -34,17 +36,17 @@ fn snapshot_with(
 /// 對應舊測試 helper `createPolicy` 的 config（數值照抄）。
 fn create_test_config() -> ResourceGuardPolicyConfig {
     ResourceGuardPolicyConfig {
-        sample_interval_seconds: 2,
-        startup_rate_grace_seconds: 120,
-        browser_recycle_consecutive_samples: 2,
+        sample_interval_seconds: 2.0,
+        startup_rate_grace_seconds: 120.0,
+        browser_recycle_consecutive_samples: 2.0,
         emergency_swap_mib: 768.0,
         fast_growth_mib: 1_024.0,
-        fast_growth_window_seconds: 30,
-        post_browser_restart_rate_grace_seconds: 120,
-        post_recycle_observation_seconds: 20,
+        fast_growth_window_seconds: 30.0,
+        post_browser_restart_rate_grace_seconds: 120.0,
+        post_recycle_observation_seconds: 20.0,
         post_recycle_minimum_drop_mib: 512.0,
         effective: ResourceGuardEffectiveThresholds {
-            max_concurrent_streams: 3,
+            max_concurrent_streams: 3.0,
             warning_memory_mib: 4_096.0,
             warning_reset_memory_mib: 3_840.0,
             browser_recycle_memory_mib: 4_608.0,
@@ -343,7 +345,7 @@ fn fast_memory_growth_is_not_triggered_by_refill_during_post_recycle_observation
     let (mut policy, now_ms) = create_policy_with_shared_clock();
 
     now_ms.store(120_000, Ordering::Relaxed);
-    policy.begin_recycle_observation(mib_to_bytes(5_000.0));
+    policy.begin_recycle_observation(mib_to_bytes(5_000.0) as u64);
     assert!(policy.is_rate_growth_suppressed());
 
     now_ms.store(140_000, Ordering::Relaxed);
@@ -363,7 +365,7 @@ fn fast_memory_growth_is_not_triggered_by_refill_during_post_recycle_observation
 // 原測試：post-recycle 成功後清除觀察；逾時則 container restart
 fn post_recycle_observation_clears_on_success_and_restarts_container_on_timeout() {
     let mut policy = create_policy();
-    policy.begin_recycle_observation(mib_to_bytes(5_000.0));
+    policy.begin_recycle_observation(mib_to_bytes(5_000.0) as u64);
 
     assert_eq!(
         policy.evaluate(&snapshot(1_000, 3_500)),
@@ -372,7 +374,7 @@ fn post_recycle_observation_clears_on_success_and_restarts_container_on_timeout(
     assert!(!policy.is_recycle_observation_active());
 
     let mut policy_timeout = create_policy();
-    policy_timeout.begin_recycle_observation(mib_to_bytes(5_000.0));
+    policy_timeout.begin_recycle_observation(mib_to_bytes(5_000.0) as u64);
     assert_eq!(
         policy_timeout.evaluate(&snapshot(0, 4_800)),
         ResourceGuardDecision::None
