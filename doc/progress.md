@@ -35,7 +35,7 @@
 | S2.3 | 未開始 | | | | |
 | S2.4 | 未開始 | | | | |
 | S2.5 | 完成 | 2026-10-19 | 0.3 天 | `channel_url.rs`（18）＋選台器（16）＋復原政策（7/7）＋resource guard 政策（12/12）＋safe-logging 補測（3）全部完成；port-coverage strict 全過。config 形狀的型別（BrowserRecoveryConfig／ResourceGuardPolicyConfig 等）暫在使用端定義，等 S2.2 loader 合併後統一 | 5213e0a |
-| S2.6 | 未開始 | | | | |
+| S2.6 | 完成 | 2026-10-19 | 0.1 天 | `create_safe_config_fingerprint`（SHA-256 hex、JSON.stringify 逐字重現：鍵序照建立順序、數字用 js_number_to_string）＋`create_runtime_startup_diagnostics`；3 個舊測試全移植（fingerprint 與舊版 TS 實作逐字相同）。golden c01/c02/c03/c05/c06 已加 fingerprint 比對（全相符）；c04/c07 錯誤案例、c08/c09 X1/X2 不比 | 
 | S2 關卡 | 未開始 | | | | |
 | S3.1 | 未開始 | | | | |
 | S3.2 | 未開始 | | | | |
