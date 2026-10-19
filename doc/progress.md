@@ -28,11 +28,11 @@
 | S1.7 | 未開始 | | | | |
 | S1.8 | 未開始 | | | | |
 | S1 關卡 | 未開始 | | | | |
-| S2.1 | 進行中 | | 0.2 天 | 消毒層（13 測試）＋ Logger 本體（11 測試，層級過濾／JSON 行／時間格式／flush、LOG_EVENTS 對 log-events.txt 驗證）已完成並合併；strict port-coverage logging 11/11。尚缺：`browser-diagnostics` 純函式（12 個舊測試） | bedac14 |
+| S2.1 | 完成 | 2026-10-19 | 0.3 天 | 消毒層（13）＋ Logger 本體（11）＋ `browser-diagnostics` 純函式（`extract_graph_ql_operation_names`／`decide_*_level`／`truncate_text`，10 個舊測試；另 6 個已由 channel_url 處置）＋ `safe_logging.rs`（舊碼無專屬測試，補測 3 個）。port-coverage strict 35/35。本步驟全部完成 | 5213e0a |
 | S2.2 | 進行中 | | 0.3 天 | `parse_yaml` 移植完成：JsValue 模型、core schema、alias 計數（99/100/101 分界）、循環 alias、BOM；**13/13 golden 全過**。尚缺：ConfigLoader、resource guard 門檻、`*.config.yml` golden、寫回（S2.3） | 4766885 |
 | S2.3 | 未開始 | | | | |
 | S2.4 | 未開始 | | | | |
-| S2.5 | 進行中 | | 0.1 天 | `channel_url.rs`（sanitize／join／分類）已移植＋18 個測試過（S2.5 其餘未開始）；實際定義位置的修正見 DEC-006 | 131098a |
+| S2.5 | 完成 | 2026-10-19 | 0.3 天 | `channel_url.rs`（18）＋選台器（16）＋復原政策（7/7）＋resource guard 政策（12/12）＋safe-logging 補測（3）全部完成；port-coverage strict 全過。config 形狀的型別（BrowserRecoveryConfig／ResourceGuardPolicyConfig 等）暫在使用端定義，等 S2.2 loader 合併後統一 | 5213e0a |
 | S2.6 | 未開始 | | | | |
 | S2 關卡 | 未開始 | | | | |
 | S3.1 | 未開始 | | | | |
