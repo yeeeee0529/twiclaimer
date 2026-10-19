@@ -1,0 +1,10 @@
+{
+  "c08-headless-false": {
+    "reason": "§6.2：不支援 headless: false",
+    "expected": { "error": { "name": "ConfigValidationError", "message": "設定欄位 headless 必須是 true" } }
+  },
+  "c09-firefox": {
+    "reason": "§6.2：只支援 chromium",
+    "expected": { "error": { "name": "ConfigValidationError", "message": "設定欄位 browser.engine 必須是 chromium" } }
+  }
+}

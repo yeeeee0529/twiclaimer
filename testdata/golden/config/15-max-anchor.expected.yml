@@ -1,0 +1,4 @@
+channels:
+  - a
+max_concurrent_streams: &m 1
+copy: *m

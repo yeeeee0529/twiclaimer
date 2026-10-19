@@ -1,0 +1,32 @@
+channels:
+  - streamer_one
+  - streamer_two
+  - streamer_three
+
+check_interval_seconds: 90
+max_concurrent_streams: 2
+headless: true
+storage_state_path: /tmp/test-storage-state.json
+log_level: debug
+
+twitch_api:
+  client_id: fixture-client-id
+  access_token: fixture-access-token
+
+browser:
+  engine: firefox
+  navigation_timeout_ms: 45000
+  page_health_check_interval_seconds: 40
+  reward_check_interval_seconds: 20
+  page_refresh_interval_seconds: 900
+  restart_on_crash: false
+  stream_quality: 360p
+  enforce_stream_quality_seconds: 180
+  viewport_width: 800
+  viewport_height: 450
+  mute_audio: false
+  block_images: false
+  block_fonts: false
+  block_known_tracking: true
+  disable_chat: false
+  resource_telemetry_interval_seconds: 240

@@ -1,0 +1,12 @@
+{
+  "results": [
+    {
+      "error": {
+        "name": "ConfigParseError",
+        "message": "設定檔格式錯誤：設定檔根節點必須是物件"
+      }
+    }
+  ],
+  "updates": [],
+  "writes": 0
+}

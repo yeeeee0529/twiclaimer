@@ -1,0 +1,7 @@
+{
+  "error": {
+    "name": "ConfigParseError",
+    "message": "設定檔格式錯誤：YAML 語法無效"
+  },
+  "logs": []
+}

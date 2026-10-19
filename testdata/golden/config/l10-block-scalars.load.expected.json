@@ -1,0 +1,7 @@
+{
+  "value": {
+    "a": "line1\nline2\n",
+    "b": "folded text",
+    "c": "esc\tqé"
+  }
+}

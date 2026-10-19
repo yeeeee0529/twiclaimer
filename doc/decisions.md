@@ -26,10 +26,18 @@
 - 理由：macOS 必然產生，進版控只會造成雜訊。
 - 影響：僅本機開發體驗，無行為差異。
 
-## DEC-001 標題
+## DEC-004 `src/browser/js/` 的載入規則（註解剝除與 trim）
 
-- 日期：YYYY-MM-DD（步驟：S1.2）
-- 問題：
-- 決定：
-- 理由：
-- 影響：檔案、測試、§6.2 的允許差異；需要人工確認時寫明
+- 日期：2026-10-19（步驟：S1.2）
+- 問題：§4.2 要求頁面內 JS 逐字複製到 `src/browser/js/`，又要求「每個檔案開頭註明來源檔案與函式」。`Page.addScriptToEvaluateOnNewDocument` 的 `source` 在 `cdp-seq.py` 以 sha256 遮蔽比對（G2），註解會改變雜湊；`chat-block-init.js` 尤其敏感。
+- 決定：每個檔案開頭放 `//` 註解標頭；Rust 端以 `include_str!` 載入後，先剝除開頭連續的 `//` 註解行，再 `trim()` 前後空白，才是送進瀏覽器的確切文字。`chat-block-init.js` 註解後的內容與 `buildChatBlockInitScript()` 的輸出逐位元組相同（不含檔尾換行）。
+- 理由：同時滿足可追溯性與 G2 的逐位元組比對。
+- 影響：S1.6 實作聊天室封鎖時要照此規則載入；S1.7 的 evaluate 函式同規則（其文字不出現在 seq 比對中，風險較低）。
+
+## DEC-005 `gen-config-golden.mjs` 的案例目錄必須傳絕對路徑
+
+- 日期：2026-10-19（步驟：S1.2）
+- 問題：`gen-config-golden.mjs` 在產生設定 golden 前會 `process.chdir(resolve(dir))`（讓 AppConfig 的相對路徑與案例目錄無關）；若 `dir` 傳相對路徑，chdir 之後自身的 `join(dir, …)` 會落在錯誤位置，`writeFileSync` 以 ENOENT 失敗。
+- 決定：不改工具（附錄檔案逐字保留），呼叫時一律傳絕對路徑：`node tools/ref/gen-config-golden.mjs "$REF" "$(pwd)/testdata/golden/config"`。
+- 理由：工具在沙箱以絕對路徑實測過；相對路徑是未涵蓋的使用方式。
+- 影響：S1.2 與日後補產 golden 的指令要記得加 `$(pwd)`；已在計畫指令之外的使用注意事項，寫入本檔供日後查閱。

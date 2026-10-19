@@ -1,0 +1,14 @@
+channels:
+  - "123"
+  - "true"
+  - "null"
+  - "1e3"
+  - "0x1F"
+  - 1_000
+  - Yes
+  - on
+  - "007"
+  - "0o17"
+  - Inf
+  - _x
+max_concurrent_streams: 2

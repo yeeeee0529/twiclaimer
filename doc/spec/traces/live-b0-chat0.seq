@@ -1,0 +1,36 @@
+browser	Browser.getVersion {}
+browser	Target.setAutoAttach {"autoAttach": true, "flatten": true, "waitForDebuggerOnStart": true}
+browser	Target.createBrowserContext {"disposeOnDetach": true}
+browser	Browser.setDownloadBehavior {"behavior": "allowAndName", "browserContextId": "<id>", "downloadPath": "<id>", "eventsEnabled": true}
+browser	Storage.setCookies {"browserContextId": "<id>", "cookies": [{"domain": ".twitch.tv", "expires": -1, "httpOnly": false, "name": "auth-token", "path": "/", "sameSite": "None", "secure": true, "value": "fake-token"}]}
+browser	Target.createTarget {"browserContextId": "<id>", "url": "about:blank"}
+browser	Target.closeTarget {"targetId": "<id>"}
+browser	Target.createTarget {"browserContextId": "<id>", "url": "about:blank"}
+browser	Target.closeTarget {"targetId": "<id>"}
+browser	Target.disposeBrowserContext {"browserContextId": "<id>"}
+page#1	Page.enable {}
+page#1	Page.getFrameTree {}
+page#1	Log.enable {}
+page#1	Page.setLifecycleEventsEnabled {"enabled": true}
+page#1	Runtime.enable {}
+page#1	Network.enable {}
+page#1	Target.setAutoAttach {"autoAttach": true, "flatten": true, "waitForDebuggerOnStart": true}
+page#1	Runtime.runIfWaitingForDebugger {}
+page#1	Network.setCacheDisabled {"cacheDisabled": true}
+page#1	Fetch.enable {"handleAuthRequests": true, "patterns": [{"requestStage": "Request", "urlPattern": "*"}]}
+page#1	Page.navigate {"frameId": "<id>", "referrerPolicy": "unsafeUrl", "url": "https://www.twitch.tv"}
+page#2	Browser.getWindowForTarget {}
+page#2	Page.enable {}
+page#2	Page.getFrameTree {}
+page#2	Log.enable {}
+page#2	Page.setLifecycleEventsEnabled {"enabled": true}
+page#2	Runtime.enable {}
+page#2	Network.enable {}
+page#2	Target.setAutoAttach {"autoAttach": true, "flatten": true, "waitForDebuggerOnStart": true}
+page#2	Emulation.setFocusEmulationEnabled {"enabled": true}
+page#2	Browser.setWindowBounds {"bounds": {"height": 720, "width": 1280}, "windowId": "<id>"}
+page#2	Emulation.setDeviceMetricsOverride {"deviceScaleFactor": 1, "height": 720, "mobile": false, "screenHeight": 720, "screenOrientation": {"angle": 0, "type": "landscapePrimary"}, "screenWidth": 1280, "width": 1280}
+page#2	Page.setFontFamilies {"fontFamilies": {"cursive": "Apple Chancery", "fantasy": "Papyrus", "fixed": "Courier", "sansSerif": "Helvetica", "serif": "Times", "standard": "Times"}, "forScripts": [{"fontFamilies": {"fixed": "Osaka-Mono", "sansSerif": "Hiragino Kaku Gothic ProN", "serif": "Hiragino Mincho ProN", "standard": "Hiragino Kaku Gothic ProN"}, "script": "jpan"}, {"fontFamilies": {"sansSerif": "Apple SD Gothic Neo", "serif": "AppleMyungjo", "standard": "Apple SD Gothic Neo"}, "script": "hang"}, {"fontFamilies": {"cursive": "Kaiti SC", "sansSerif": ",PingFang SC,STHeiti", "serif": "Songti SC", "standard": ",PingFang SC,STHeiti"}, "script": "hans"}, {"fontFamilies": {"cursive": "Kaiti TC", "sansSerif": ",PingFang TC,Heiti TC", "serif": "Songti TC", "standard": ",PingFang TC,Heiti TC"}, "script": "hant"}]}
+page#2	Emulation.setEmulatedMedia {"features": [{"name": "prefers-color-scheme", "value": "light"}, {"name": "prefers-reduced-motion", "value": "no-preference"}, {"name": "forced-colors", "value": "none"}, {"name": "prefers-contrast", "value": "no-preference"}], "media": ""}
+page#2	Runtime.runIfWaitingForDebugger {}
+page#2	Page.navigate {"frameId": "<id>", "referrerPolicy": "unsafeUrl", "url": "<mock-pages>/live.html"}

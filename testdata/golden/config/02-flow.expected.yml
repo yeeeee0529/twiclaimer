@@ -1,0 +1,4 @@
+channels:
+  - first
+  - third
+max_concurrent_streams: 2

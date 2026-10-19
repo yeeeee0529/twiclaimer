@@ -1,0 +1,33 @@
+{"case":"goto-timeout","name":"TimeoutError","message":"page.goto: Timeout 300ms exceeded."}
+{"case":"goto-default-navigation-timeout","name":"TimeoutError","message":"page.goto: Timeout 400ms exceeded."}
+{"case":"goto-refused","name":"Error","message":"page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:62406/"}
+{"case":"goto-abort-signal","name":"AbortError","message":"page.goto: This operation was aborted"}
+{"case":"reload-timeout","name":"TimeoutError","message":"page.reload: Timeout 300ms exceeded."}
+{"case":"click-strict","name":"Error","message":"locator.click: Error: strict mode violation: locator('button') resolved to 4 elements:"}
+{"case":"click-hidden","name":"TimeoutError","message":"locator.click: Timeout 300ms exceeded."}
+{"case":"click-disabled","name":"TimeoutError","message":"locator.click: Timeout 300ms exceeded."}
+{"case":"click-covered","name":"TimeoutError","message":"locator.click: Timeout 300ms exceeded."}
+{"case":"hover-missing","name":"TimeoutError","message":"locator.hover: Timeout 300ms exceeded."}
+{"case":"waitfor-missing","name":"TimeoutError","message":"locator.waitFor: Timeout 300ms exceeded."}
+{"case":"waitfor-hidden-visible","name":"TimeoutError","message":"locator.waitFor: Timeout 300ms exceeded."}
+{"case":"textcontent-missing","name":"TimeoutError","message":"locator.textContent: Timeout 300ms exceeded."}
+{"case":"getattribute-strict","name":"Error","message":"locator.getAttribute: Error: strict mode violation: locator('button') resolved to 4 elements:"}
+{"case":"isvisible-strict","name":"Error","message":"locator.isVisible: Error: strict mode violation: locator('button') resolved to 4 elements:"}
+{"case":"isvisible-missing","ok":true}
+{"case":"count-missing","ok":true}
+{"case":"locator-evaluate-missing","name":"TimeoutError","message":"locator.evaluate: Timeout 300ms exceeded."}
+{"case":"dispatch-missing","name":"TimeoutError","message":"locator.dispatchEvent: Timeout 300ms exceeded."}
+{"case":"evaluate-throw","name":"Error","message":"page.evaluate: Error: boom"}
+{"case":"evaluate-reject","name":"Error","message":"page.evaluate: TypeError: nope"}
+{"case":"getattribute-missing","name":"TimeoutError","message":"locator.getAttribute: Timeout 300ms exceeded."}
+{"case":"evaluateall-missing","ok":true}
+{"case":"evaluate-navigation","name":"Error","message":"page.evaluate: Execution context was destroyed, most likely because of a navigation."}
+{"case":"goto-crash","name":"Error","message":"page.goto: net::ERR_ABORTED at chrome://crash"}
+{"case":"after-crash-evaluate","name":"Error","message":"page.evaluate: Target crashed "}
+{"case":"after-crash-close","ok":true}
+{"case":"closed-goto","name":"Error","message":"page.goto: Target page, context or browser has been closed"}
+{"case":"closed-click","name":"Error","message":"locator.click: Target page, context or browser has been closed"}
+{"case":"closed-evaluate","name":"Error","message":"page.evaluate: Target page, context or browser has been closed"}
+{"case":"closed-screenshot","name":"Error","message":"page.screenshot: Target page, context or browser has been closed"}
+{"case":"closed-isvisible","name":"Error","message":"locator.isVisible: Target page, context or browser has been closed"}
+{"case":"browser-closed-newpage","name":"Error","message":"browserContext.newPage: Target page, context or browser has been closed"}

@@ -1,0 +1,18 @@
+a: yes
+b: on
+c: 1_000
+d: 0x1F
+e: .inf
+f: ~
+g: 123456789012345678
+h: "${HOME}"
+i: 0o17
+j: 1e3
+k: TRUE
+l: -.INF
+m: .nan
+n: 0.5
+o: +12
+p: 010
+q: ''
+r:

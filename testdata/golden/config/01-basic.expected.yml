@@ -1,0 +1,8 @@
+# keep this comment
+channels:
+  - second
+  - third
+max_concurrent_streams: 2
+log_level: debug
+twitch_api:
+  client_id: ${TWITCH_CLIENT_ID}

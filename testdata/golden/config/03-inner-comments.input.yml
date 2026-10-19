@@ -1,0 +1,6 @@
+channels: # 依優先序
+  # main
+  - first # primary
+  - second
+max_concurrent_streams: 2 # 上限
+log_level: info

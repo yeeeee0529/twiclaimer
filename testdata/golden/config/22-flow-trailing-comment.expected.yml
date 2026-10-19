@@ -1,0 +1,3 @@
+channels:
+  - c
+max_concurrent_streams: 1 # 上限

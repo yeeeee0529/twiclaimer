@@ -1,0 +1,12 @@
+{
+  "results": [
+    {
+      "error": {
+        "name": "ConfigParseError",
+        "message": "設定檔格式錯誤：無法更新含有語法錯誤的設定檔"
+      }
+    }
+  ],
+  "updates": [],
+  "writes": 0
+}

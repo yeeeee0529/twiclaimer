@@ -1,0 +1,6 @@
+{
+  "error": {
+    "name": "ConfigParseError",
+    "message": "設定檔格式錯誤：YAML 不可包含循環 alias"
+  }
+}

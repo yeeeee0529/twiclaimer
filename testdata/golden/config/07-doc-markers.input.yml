@@ -1,0 +1,5 @@
+---
+# header
+channels: [a]
+max_concurrent_streams: 1
+# trailing

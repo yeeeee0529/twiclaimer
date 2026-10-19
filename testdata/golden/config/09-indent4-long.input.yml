@@ -1,0 +1,8 @@
+twitch_api:
+    client_id: "${TWITCH_CLIENT_ID}"
+    client_secret: '${TWITCH_CLIENT_SECRET}'
+channels:
+    - a
+max_concurrent_streams: 1
+note: this is a very long plain scalar value that goes beyond eighty characters for sure yes indeed
+ids: [123456789012345678, "987"]

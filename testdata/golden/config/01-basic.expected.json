@@ -1,0 +1,23 @@
+{
+  "results": [
+    {
+      "value": {
+        "channels": [
+          "second",
+          "third"
+        ],
+        "maxConcurrentStreams": 2
+      }
+    }
+  ],
+  "updates": [
+    {
+      "channels": [
+        "second",
+        "third"
+      ],
+      "maxConcurrentStreams": 2
+    }
+  ],
+  "writes": 1
+}

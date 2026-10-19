@@ -1,0 +1,2 @@
+channels: [a, b]  # 行尾註解
+max_concurrent_streams: 2 # 上限

@@ -1,0 +1,75 @@
+{
+  "results": [
+    {
+      "error": {
+        "name": "ConfigValidationError",
+        "message": "設定欄位 channels 至少需要一個頻道"
+      }
+    },
+    {
+      "error": {
+        "name": "ConfigValidationError",
+        "message": "設定欄位 channels[0] 必須是 1 到 25 字元的英數字或底線"
+      }
+    },
+    {
+      "error": {
+        "name": "ConfigValidationError",
+        "message": "設定欄位 channels[0] 必須是 1 到 25 字元的英數字或底線"
+      }
+    },
+    {
+      "value": {
+        "channels": [
+          "A",
+          "B_1"
+        ],
+        "maxConcurrentStreams": 2
+      }
+    },
+    {
+      "error": {
+        "name": "ConfigValidationError",
+        "message": "設定欄位 max_concurrent_streams 必須是大於或等於 1 的整數"
+      }
+    },
+    {
+      "error": {
+        "name": "ConfigValidationError",
+        "message": "設定欄位 max_concurrent_streams 不可大於目前頻道數 2"
+      }
+    },
+    {
+      "error": {
+        "name": "ConfigValidationError",
+        "message": "設定欄位 max_concurrent_streams 必須是大於或等於 1 的整數"
+      }
+    },
+    {
+      "value": {
+        "channels": [
+          "A",
+          "B_1"
+        ],
+        "maxConcurrentStreams": 1
+      }
+    }
+  ],
+  "updates": [
+    {
+      "channels": [
+        "A",
+        "B_1"
+      ],
+      "maxConcurrentStreams": 2
+    },
+    {
+      "channels": [
+        "A",
+        "B_1"
+      ],
+      "maxConcurrentStreams": 1
+    }
+  ],
+  "writes": 2
+}

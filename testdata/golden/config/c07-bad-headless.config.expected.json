@@ -1,0 +1,7 @@
+{
+  "error": {
+    "name": "ConfigValidationError",
+    "message": "設定欄位 headless 環境變數必須是 true 或 false"
+  },
+  "logs": []
+}

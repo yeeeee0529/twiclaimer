@@ -1,0 +1,113 @@
+{
+  "value": {
+    "channels": [
+      "streamer_one",
+      "streamer_two"
+    ],
+    "checkIntervalSeconds": 60,
+    "maxConcurrentStreams": 2,
+    "headless": true,
+    "storageStatePath": "/data/browser-state/storage-state.json",
+    "logLevel": "info",
+    "twitchApi": {
+      "clientId": "fixture-client-id",
+      "accessToken": "fixture-access-token",
+      "clientSecret": ""
+    },
+    "browser": {
+      "engine": "chromium",
+      "navigationTimeoutMs": 30000,
+      "pageHealthCheckIntervalSeconds": 60,
+      "rewardCheckIntervalSeconds": 30,
+      "pageRefreshIntervalSeconds": 0,
+      "restartOnCrash": true,
+      "streamQuality": "160p",
+      "enforceStreamQualitySeconds": 120,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "muteAudio": true,
+      "blockImages": false,
+      "blockFonts": false,
+      "blockKnownTracking": false,
+      "disableChat": true,
+      "resourceTelemetryIntervalSeconds": 60,
+      "recovery": {
+        "pageCrashBackoffSeconds": [
+          30,
+          60,
+          120
+        ],
+        "channelCrashWindowSeconds": 600,
+        "channelQuarantineThreshold": 4,
+        "channelQuarantineSeconds": 900,
+        "stableResetSeconds": 1800,
+        "multiChannelCrashWindowSeconds": 15,
+        "multiChannelCrashThreshold": 2,
+        "browserFailureWindowSeconds": 600,
+        "browserFailureContainerThreshold": 3
+      },
+      "sessionStart": {
+        "failureBackoffSeconds": [
+          30,
+          60,
+          120
+        ],
+        "maximumCooldownSeconds": 900
+      },
+      "resourceGuard": {
+        "enabled": true,
+        "sampleIntervalSeconds": 2,
+        "startupRateGraceSeconds": 120,
+        "scaleWithStreams": true,
+        "baselineStreams": 3,
+        "baseMemoryMib": 512,
+        "warningMemoryMib": 4096,
+        "warningResetMemoryMib": 3840,
+        "browserRecycleMemoryMib": 4608,
+        "browserRecycleConsecutiveSamples": 2,
+        "emergencyMemoryMib": 5376,
+        "emergencySwapMib": 768,
+        "fastGrowthMib": 1024,
+        "fastGrowthWindowSeconds": 30,
+        "postBrowserRestartRateGraceSeconds": 120,
+        "postRecycleObservationSeconds": 20,
+        "postRecycleTargetMemoryMib": 4096,
+        "postRecycleMinimumDropMib": 512,
+        "effective": {
+          "maxConcurrentStreams": 2,
+          "warningMemoryMib": 2901,
+          "warningResetMemoryMib": 2731,
+          "browserRecycleMemoryMib": 3243,
+          "emergencyMemoryMib": 3755,
+          "postRecycleTargetMemoryMib": 2901
+        }
+      }
+    },
+    "telegram": {
+      "enabled": false,
+      "botToken": "",
+      "allowedChatIds": [],
+      "pollingTimeoutSeconds": 25
+    },
+    "discord": {
+      "enabled": false,
+      "botToken": "",
+      "applicationId": "",
+      "guildId": "",
+      "allowedChannelIds": [],
+      "allowDirectMessages": false,
+      "allowedUserIds": []
+    }
+  },
+  "fingerprint": "1c88af6a8e44f4186c98438f31f927037091b1f0b873ce7d6d3e6571a5adf6f4",
+  "logs": [
+    {
+      "event": "config_concurrency_clamped",
+      "fields": {
+        "requestedMaxConcurrentStreams": 3,
+        "effectiveMaxConcurrentStreams": 2,
+        "channelCount": 2
+      }
+    }
+  ]
+}

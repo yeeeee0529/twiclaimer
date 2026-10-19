@@ -1,0 +1,26 @@
+{"kind":"response","url":"127.0.0.1/","method":"GET","resourceType":"document","status":200,"statusText":"OK"}
+{"kind":"response","url":"127.0.0.1/font.css","method":"GET","resourceType":"stylesheet","status":200,"statusText":"OK"}
+{"kind":"console","type":"log","text":"main 1 {a: 1} [1, 2] undefined null","sourceUrl":"127.0.0.1/","lineNumber":4,"columnNumber":8}
+{"kind":"console","type":"log","text":"%s fmt x NaN 0 undefined true Symbol(s) () => 1 JSHandle@node Map(1) {nested: Object}","sourceUrl":"127.0.0.1/","lineNumber":5,"columnNumber":8}
+{"kind":"console","type":"warning","text":"access_token=[REDACTED] Bearer [REDACTED]","sourceUrl":"127.0.0.1/","lineNumber":6,"columnNumber":8}
+{"kind":"response","url":"localhost/frame.html","method":"GET","resourceType":"document","status":200,"statusText":"OK"}
+{"kind":"response","url":"127.0.0.1/img.png","method":"GET","resourceType":"image","status":200,"statusText":"OK"}
+{"kind":"requestfailed","url":"127.0.0.1/refused","method":"GET","resourceType":"fetch","failureText":"net::ERR_UNSAFE_PORT"}
+{"kind":"console","type":"error","text":"Failed to load resource: net::ERR_UNSAFE_PORT","sourceUrl":"127.0.0.1/refused","lineNumber":0,"columnNumber":0}
+{"kind":"response","url":"127.0.0.1/font.woff2","method":"GET","resourceType":"font","status":404,"statusText":"Not Found"}
+{"kind":"console","type":"error","text":"Failed to load resource: the server responded with a status of 404 (Not Found)","sourceUrl":"127.0.0.1/font.woff2","lineNumber":0,"columnNumber":0}
+{"kind":"requestfailed","url":"127.0.0.1/font.woff2","method":"GET","resourceType":"font","failureText":"net::ERR_ABORTED"}
+{"kind":"response","url":"127.0.0.1/missing","method":"GET","resourceType":"fetch","status":404,"statusText":"Not Found"}
+{"kind":"console","type":"error","text":"Failed to load resource: the server responded with a status of 404 (Not Found)","sourceUrl":"127.0.0.1/missing","lineNumber":0,"columnNumber":0}
+{"kind":"response","url":"127.0.0.1/gql","method":"POST","resourceType":"fetch","status":500,"statusText":"Internal Server Error","graphQlOperationNames":["PlaybackAccessToken","ChannelPointsContext"]}
+{"kind":"console","type":"error","text":"Failed to load resource: the server responded with a status of 500 (Internal Server Error)","sourceUrl":"127.0.0.1/gql","lineNumber":0,"columnNumber":0}
+{"kind":"console","type":"error","text":"frame-error","sourceUrl":"localhost/frame.html","lineNumber":0,"columnNumber":16}
+{"kind":"requestfailed","url":"127.0.0.1/missing","method":"GET","resourceType":"fetch","failureText":"net::ERR_ABORTED"}
+{"kind":"response","url":"localhost/missing-in-frame","method":"GET","resourceType":"fetch","status":404,"statusText":"Not Found"}
+{"kind":"console","type":"error","text":"Failed to load resource: the server responded with a status of 404 (Not Found)","sourceUrl":"localhost/missing-in-frame","lineNumber":0,"columnNumber":0}
+{"kind":"requestfailed","url":"localhost/missing-in-frame","method":"GET","resourceType":"fetch","failureText":"net::ERR_ABORTED"}
+{"kind":"response","url":"127.0.0.1/worker.js","method":"GET","resourceType":"script","status":200,"statusText":"OK"}
+{"kind":"console","type":"info","text":"worker-log","sourceUrl":"127.0.0.1/worker.js","lineNumber":0,"columnNumber":8}
+{"kind":"response","url":"127.0.0.1/missing-in-worker","method":"GET","resourceType":"fetch","status":404,"statusText":"Not Found"}
+{"kind":"requestfailed","url":"127.0.0.1/missing-in-worker","method":"GET","resourceType":"fetch","failureText":"net::ERR_ABORTED"}
+{"kind":"popup"}

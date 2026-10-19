@@ -1,0 +1,4 @@
+channels:
+  - first
+max_concurrent_streams: 1 # 上限
+log_level: info

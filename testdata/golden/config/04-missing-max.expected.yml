@@ -1,0 +1,5 @@
+channels:
+  - a
+  - b
+log_level: info
+max_concurrent_streams: 1

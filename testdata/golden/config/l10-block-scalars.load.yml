@@ -1,0 +1,7 @@
+a: |
+  line1
+  line2
+b: >-
+  folded
+  text
+c: "esc\tq\u00e9"

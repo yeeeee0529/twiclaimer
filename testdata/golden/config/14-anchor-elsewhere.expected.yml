@@ -1,0 +1,7 @@
+defaults: &d
+  x: 1
+other: *d
+channels:
+  - a
+  - b
+max_concurrent_streams: 2

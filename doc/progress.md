@@ -1,6 +1,6 @@
 # 進度
 
-- 目前步驟：S1.2
+- 目前步驟：S1.3
 - 卡住的項目：無
 
 ## 階段
@@ -20,7 +20,7 @@
 | --- | --- | --- | --- | --- | --- |
 | S0.1–S0.7 | 未開始 | | | | |
 | S1.1 | 完成 | 2026-10-19 | 0.2 天 | `scripts/check.sh` 全綠（fmt／clippy／test、npm test 7 個、port-coverage 8 已處置／0 未知）；`extract-spec.sh` 產出 397 列測試標題與 149 個日誌事件 | S1.1 |
-| S1.2 | 未開始 | | | | |
+| S1.2 | 完成 | 2026-10-19 | 0.2 天 | `pw-errors.jsonl` 33 列；9 組錄製均有 `.seq` 與 `.diag.jsonl`；`chromium-args.txt` 45 個參數含 `--remote-debugging-pipe`；二次錄製 `git diff` 零差異；`src/browser/js/` 6 個頁面內 JS 逐字複製並通過 Node 語法檢查 | S1.2 |
 | S1.3 | 未開始 | | | | |
 | S1.4 | 未開始 | | | | |
 | S1.5 | 未開始 | | | | |

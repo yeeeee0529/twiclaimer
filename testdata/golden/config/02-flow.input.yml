@@ -1,0 +1,2 @@
+channels: [first, second] # inline
+max_concurrent_streams: 2

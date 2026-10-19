@@ -1,0 +1,4 @@
+channels: &ch
+  - a
+mirror: *ch
+max_concurrent_streams: 1

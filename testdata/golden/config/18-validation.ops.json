@@ -1,0 +1,1 @@
+{"initial":{"channels":["a","b"],"maxConcurrentStreams":2},"ops":[{"setChannels":[]},{"setChannels":["bad-name"]},{"setChannels":["abcdefghijklmnopqrstuvwxyz"]},{"setChannels":[" A ","a","B_1"]},{"setMaxConcurrentStreams":0},{"setMaxConcurrentStreams":3},{"setMaxConcurrentStreams":1.5},{"setMaxConcurrentStreams":1}]}

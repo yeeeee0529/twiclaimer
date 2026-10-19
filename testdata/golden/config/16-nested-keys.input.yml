@@ -1,0 +1,6 @@
+telegram:
+  channels: keep-me
+  max_concurrent_streams: 9
+channels:
+  - a
+max_concurrent_streams: 1

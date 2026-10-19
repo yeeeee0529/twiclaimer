@@ -1,0 +1,8 @@
+---
+# header
+channels:
+  - a
+  - b
+max_concurrent_streams: 2
+
+# trailing
