@@ -55,12 +55,12 @@ for name in "${names[@]}"; do
   fi
   if ! TRACE_BLOCKING=$blocking TRACE_DISABLE_CHAT=$chat TWICLAIMER_CDP_TRACE="$out/$name.log" \
     "$bin" probe "$state" "$target" > "$out/$name.diag.jsonl"; then
-    echo "$name：probe 失敗"
+    echo "${name}：probe 失敗"
     failed=1
     continue
   fi
   python3 tools/ref/cdp-seq.py "$out/$name.log" > "$out/$name.seq"
-  result="$name："
+  result="${name}："
   if diff -u "$traces/$name.seq" "$out/$name.seq" > "$out/$name.seq.diff"; then
     result+="CDP 順序相同"
   else
