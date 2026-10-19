@@ -12,6 +12,7 @@ pub(crate) mod errors;
 pub(crate) mod loader;
 pub(crate) mod model;
 pub(crate) mod thresholds;
+pub(crate) mod writeback;
 pub(crate) mod yaml;
 
 /// golden 比對的共用輔助（測試專用）。
