@@ -2,7 +2,7 @@
 //! 事件分類）與 Connection 的讀寫 task 接線（S1.3）。
 use std::time::Duration;
 
-use super::{CdpError, Connection, EVENT_CHANNEL_CAPACITY, Router, SessionNotice};
+use super::{CdpError, Connection, DetachedSession, EVENT_CHANNEL_CAPACITY, Router, SessionNotice};
 use crate::browser::cdp::transport::encode_message;
 use serde_json::json;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream};
@@ -120,7 +120,16 @@ fn attached_to_target_registers_session_and_reports() {
     let outcome = router.handle_message(
         r#"{"method":"Target.attachedToTarget","params":{"sessionId":"p1","targetInfo":{"type":"page"}}}"#,
     );
-    assert_eq!(outcome.sessions_attached, vec!["p1".to_string()]);
+    assert_eq!(outcome.sessions_attached.len(), 1);
+    let attached = &outcome.sessions_attached[0];
+    assert_eq!(attached.session_id, "p1");
+    assert_eq!(
+        attached
+            .params
+            .get("targetInfo")
+            .and_then(|t| t.get("type")),
+        Some(&serde_json::json!("page"))
+    );
     assert_eq!(outcome.lifecycle_events, Vec::new());
     // 新 session 的事件通道已就緒。
     assert_eq!(router.dropped_diagnostics("p1"), Some(0));
@@ -134,7 +143,13 @@ fn detached_from_target_unregisters_session_and_fails_pending() {
 
     let outcome = router
         .handle_message(r#"{"method":"Target.detachedFromTarget","params":{"sessionId":"p1"}}"#);
-    assert_eq!(outcome.sessions_detached, vec!["p1".to_string()]);
+    assert_eq!(
+        outcome.sessions_detached,
+        vec![DetachedSession {
+            session_id: "p1".to_string(),
+            target_id: None,
+        }]
+    );
     assert_eq!(rx.try_recv().unwrap(), Err(CdpError::TargetClosed));
     assert_eq!(router.dropped_diagnostics("p1"), None, "session 已不存在");
 }
@@ -145,7 +160,7 @@ fn diagnostic_event_for_unknown_session_is_dropped_silently() {
     let outcome = router
         .handle_message(r#"{"sessionId":"ghost","method":"Network.loadingFailed","params":{}}"#);
     assert_eq!(outcome.lifecycle_events, Vec::new());
-    assert_eq!(outcome.sessions_attached, [] as [String; 0]);
+    assert_eq!(outcome.sessions_attached, Vec::new());
 }
 
 #[test]
@@ -198,7 +213,8 @@ fn spawn_connection() -> (
 ) {
     let (ours, theirs) = tokio::io::duplex(64 * 1024);
     let (reader, writer) = tokio::io::split(ours);
-    let (connection, notices) = Connection::spawn(reader, writer, None);
+    let trace = crate::browser::cdp::launcher::shared_trace_from_env();
+    let (connection, notices) = Connection::spawn(reader, writer, None, trace);
     (connection, notices, theirs)
 }
 
@@ -339,6 +355,7 @@ async fn attach_and_detach_notices_carry_session_events() {
     let SessionNotice::Attached {
         session_id,
         mut events,
+        ..
     } = notices.recv().await.unwrap()
     else {
         panic!("應收到 Attached 通知");
@@ -368,7 +385,7 @@ async fn attach_and_detach_notices_carry_session_events() {
     )
     .await;
     match notices.recv().await.unwrap() {
-        SessionNotice::Detached { session_id } => assert_eq!(session_id, "p1"),
+        SessionNotice::Detached { session_id, .. } => assert_eq!(session_id, "p1"),
         SessionNotice::Attached { .. } => panic!("應收到 Detached 通知"),
     }
 }
@@ -400,6 +417,7 @@ async fn lifecycle_events_wait_when_session_channel_full() {
     let SessionNotice::Attached {
         session_id: _,
         events,
+        ..
     } = notices.recv().await.unwrap()
     else {
         panic!("應收到 Attached 通知");

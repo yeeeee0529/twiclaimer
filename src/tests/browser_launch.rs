@@ -226,9 +226,11 @@ async fn cancelling_close_kills_a_browser_that_ignores_browser_close() {
     let profile = profile.to_path_buf();
     let artifacts = artifacts.to_path_buf();
 
-    // close() 的 future 被取消（呼叫端逾時的等價情境）：把手隨 future 一起 drop → killpg。
+    // close() 的 future 被取消（呼叫端逾時的等價情境）：未來被 drop 後把手也一併
+    // 釋放 → killpg。瀏覽器不理會 Browser.close，只能靠 killpg 收掉。
     let close_future = browser.close();
     drop(close_future);
+    drop(browser);
 
     assert_fully_cleaned_up(&profile, &artifacts, pgid).await;
 }

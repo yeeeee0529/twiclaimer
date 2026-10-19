@@ -8,7 +8,6 @@
 //! 編碼後寫到輸出端。
 //!
 //! 以下 API 尚無正式呼叫端，等對應步驟接上後移除 allow：
-//! - `Connection::register_session`／`unregister_session`（S1.4，嵌套 auto-attach）。
 //! - `Router::dropped_diagnostics`（S1.6 的診斷計數）與 `Router::pending_count`（測試用）。
 #![allow(dead_code)]
 
@@ -19,6 +18,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::{Mutex, mpsc, oneshot};
 use tokio::task::JoinHandle;
 
+use super::launcher::SharedTrace;
 use super::transport::{self, MessageDecoder};
 
 /// 每個 session 的事件 channel 容量（§7.3.2：1024）。
@@ -78,22 +78,47 @@ pub(crate) struct RouteOutcome {
     /// 生命週期事件：呼叫端必須 `send().await`（不可丟棄）。
     pub(crate) lifecycle_events: Vec<Event>,
     /// browser session 上新 attach 的子 session（`Target.attachedToTarget`）。
-    pub(crate) sessions_attached: Vec<String>,
+    pub(crate) sessions_attached: Vec<AttachedSession>,
     /// 結束的子 session（`Target.detachedFromTarget`）。
-    pub(crate) sessions_detached: Vec<String>,
+    pub(crate) sessions_detached: Vec<DetachedSession>,
+}
+
+/// 新 attach 的子 session：事件接收端與 `Target.attachedToTarget` 的原文 params。
+#[derive(Debug, PartialEq)]
+pub(crate) struct AttachedSession {
+    pub(crate) session_id: String,
+    /// `Target.attachedToTarget` 的完整 params（`targetInfo`、`openerId`、
+    /// `waitingForDebugger`）——上層依 `targetInfo.type` 分派。
+    pub(crate) params: serde_json::Value,
+}
+
+/// 結束的子 session：`Target.detachedFromTarget` 的 `sessionId` 與 `targetId`。
+#[derive(Debug, PartialEq)]
+pub(crate) struct DetachedSession {
+    pub(crate) session_id: String,
+    /// CDP 的 `targetId`（optional；頁面 target 結束的對照用）。
+    pub(crate) target_id: Option<String>,
 }
 
 /// session 生命週期通知：讀取迴圈送給上層（S1.4）。
 #[derive(Debug)]
 pub(crate) enum SessionNotice {
     /// 子 session 已 attach；`events` 是它的事件接收端，上層持有並消費
-    /// （生命週期事件在裡面等待、診斷事件可丟棄）。
+    /// （生命週期事件在裡面等待、診斷事件可丟棄）；`params` 是
+    /// `Target.attachedToTarget` 的完整 params（`targetInfo`、`openerId`）。
     Attached {
         session_id: String,
         events: mpsc::Receiver<Event>,
+        params: serde_json::Value,
     },
     /// 子 session 已結束（`Target.detachedFromTarget`）。
-    Detached { session_id: String },
+    ///
+    /// `target_id` 是事件的 `targetId`（optional in CDP）；上層的 pages 對照表以
+    /// targetId 為鍵，頁面 target 結束的 on_close 靠它對應。
+    Detached {
+        session_id: String,
+        target_id: Option<String>,
+    },
 }
 
 /// 指令路由器：id 遞增、回應依 id 交給等待者、session 結束時未完成的指令全部失敗。
@@ -261,7 +286,9 @@ impl Router {
                     // 接收端先暫存在 router，讀取迴圈取走後隨 attach 通知交給上層。
                     let events = self.register_session(&session_id);
                     self.session_receivers.insert(session_id.clone(), events);
-                    outcome.sessions_attached.push(session_id);
+                    outcome
+                        .sessions_attached
+                        .push(AttachedSession { session_id, params });
                     return outcome;
                 }
                 "Target.detachedFromTarget" => {
@@ -271,7 +298,13 @@ impl Router {
                         .unwrap_or_default()
                         .to_string();
                     self.unregister_session(&session_id);
-                    outcome.sessions_detached.push(session_id);
+                    outcome.sessions_detached.push(DetachedSession {
+                        session_id,
+                        target_id: params
+                            .get("targetId")
+                            .and_then(serde_json::Value::as_str)
+                            .map(str::to_string),
+                    });
                     return outcome;
                 }
                 _ => {}
@@ -334,6 +367,8 @@ pub(crate) struct Connection {
     write_tx: mpsc::UnboundedSender<String>,
     /// 關閉訊號的送端：drop（或送出）後讀取 task 於下一個讀取點收尾。
     shutdown: oneshot::Sender<()>,
+    /// CDP trace 寫入器（§7.3.7）：SEND／RECV 每則訊息各一行；未設定時 no-op。
+    trace: SharedTrace,
     read_task: JoinHandle<()>,
     write_task: JoinHandle<()>,
 }
@@ -351,6 +386,7 @@ impl Connection {
         reader: R,
         writer: W,
         on_read_end: Option<oneshot::Sender<()>>,
+        trace: SharedTrace,
     ) -> (Self, mpsc::Receiver<SessionNotice>)
     where
         R: AsyncRead + Unpin + Send + 'static,
@@ -367,6 +403,7 @@ impl Connection {
             notices_tx,
             shutdown_rx,
             on_read_end,
+            Arc::clone(&trace),
         ));
         let write_task = tokio::spawn(write_loop(writer, write_rx, Arc::clone(&router)));
         (
@@ -374,6 +411,7 @@ impl Connection {
                 router,
                 write_tx,
                 shutdown,
+                trace,
                 read_task,
                 write_task,
             },
@@ -401,7 +439,10 @@ impl Connection {
             if let Some(session) = session {
                 message["sessionId"] = serde_json::Value::String(session.to_string());
             }
-            if self.write_tx.send(message.to_string()).is_err() {
+            let text = message.to_string();
+            // §7.3.7：每則送出的指令記一行 SEND（Browser.close 不記，見 send_unguarded）。
+            record_send(&self.trace, &text);
+            if self.write_tx.send(text).is_err() {
                 // 寫入 task 已收尾（連線關閉）：指令送不出去也等不到回應，
                 // 直接失敗，不要讓等待者掛到連線收尾才清理。
                 router.cancel_command(id);
@@ -463,6 +504,7 @@ async fn read_loop<R: AsyncRead + Unpin>(
     notices: mpsc::Sender<SessionNotice>,
     mut shutdown: oneshot::Receiver<()>,
     on_read_end: Option<oneshot::Sender<()>>,
+    trace: SharedTrace,
 ) {
     let mut decoder = MessageDecoder::new();
     let mut buf = vec![0u8; 8192];
@@ -484,6 +526,8 @@ async fn read_loop<R: AsyncRead + Unpin>(
                 Err(oneshot::error::TryRecvError::Empty) => {}
                 _ => break 'read,
             }
+            // §7.3.7：每則收到的訊息記一行 RECV（含 attach 事件，cdp-seq.py 依此命名 session）。
+            record_recv(&trace, &text);
             // 鎖內做純路由並取走 attach 的事件接收端；所有 `.await` 都在鎖外。
             let (outcome, attached) = {
                 let mut guard = router.lock().await;
@@ -491,12 +535,13 @@ async fn read_loop<R: AsyncRead + Unpin>(
                 let attached = outcome
                     .sessions_attached
                     .iter()
-                    .map(|session_id| {
+                    .map(|session| {
                         (
-                            session_id.clone(),
+                            session.session_id.clone(),
+                            session.params.clone(),
                             // attach 時一定有放入接收端；fallback 是立即關閉的 channel。
                             guard
-                                .take_session_receiver(session_id)
+                                .take_session_receiver(&session.session_id)
                                 .unwrap_or_else(|| mpsc::channel(1).1),
                         )
                     })
@@ -514,13 +559,22 @@ async fn read_loop<R: AsyncRead + Unpin>(
                 }
             }
             // attach／detach 通知交給上層；上層已停止消費（連線關閉中）時丟棄。
-            for (session_id, events) in attached {
+            for (session_id, params, events) in attached {
                 let _ = notices
-                    .send(SessionNotice::Attached { session_id, events })
+                    .send(SessionNotice::Attached {
+                        session_id,
+                        events,
+                        params,
+                    })
                     .await;
             }
-            for session_id in outcome.sessions_detached {
-                let _ = notices.send(SessionNotice::Detached { session_id }).await;
+            for detached in outcome.sessions_detached {
+                let _ = notices
+                    .send(SessionNotice::Detached {
+                        session_id: detached.session_id,
+                        target_id: detached.target_id,
+                    })
+                    .await;
             }
         }
     }
@@ -559,6 +613,22 @@ fn is_diagnostic_event(method: &str) -> bool {
     method.starts_with("Network.")
         || method == "Log.entryAdded"
         || method == "Runtime.consoleAPICalled"
+}
+
+/// 在 trace 鎖內記一行 SEND；寫入器停用時零成本。
+fn record_send(trace: &SharedTrace, json: &str) {
+    let mut writer = trace
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    writer.record_send(json);
+}
+
+/// 在 trace 鎖內記一行 RECV；寫入器停用時零成本。
+fn record_recv(trace: &SharedTrace, json: &str) {
+    let mut writer = trace
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    writer.record_recv(json);
 }
 
 #[cfg(test)]
