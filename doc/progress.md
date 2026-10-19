@@ -28,7 +28,7 @@
 | S1.7 | 未開始 | | | | |
 | S1.8 | 未開始 | | | | |
 | S1 關卡 | 未開始 | | | | |
-| S2.1 | 進行中 | | 0.1 天 | 消毒層完成：`sanitize_value`／`sanitize_error`／`is_sensitive_key`／`redact_sensitive_string`＋`SanitizedValue` 模型（13 個測試，6 個舊測試移植＋regex 專屬測試）；Logger 本體（層級過濾、輸出、flush）與 `browser-diagnostics` 純函式未做 | d22d892 |
+| S2.1 | 進行中 | | 0.2 天 | 消毒層（13 測試）＋ Logger 本體（11 測試，層級過濾／JSON 行／時間格式／flush、LOG_EVENTS 對 log-events.txt 驗證）已完成並合併；strict port-coverage logging 11/11。尚缺：`browser-diagnostics` 純函式（12 個舊測試） | bedac14 |
 | S2.2 | 未開始 | | | | |
 | S2.3 | 未開始 | | | | |
 | S2.4 | 未開始 | | | | |
