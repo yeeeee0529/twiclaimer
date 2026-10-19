@@ -8,6 +8,7 @@
 
 use std::sync::{Arc, Mutex};
 
+use crate::app::diagnostics::create_safe_config_fingerprint;
 use crate::config::errors::ConfigLoadError;
 use crate::config::golden::{GOLDEN_DIR, json_eq};
 use crate::config::loader::{ConfigLogger, ProcessEnv, YamlConfigLoader};
@@ -116,7 +117,7 @@ fn assert_validation_field(error: &ConfigLoadError, field: &str) {
 }
 
 // ---------------------------------------------------------------------------
-// golden 設定案例（一案例一測試；fingerprint 於 S2.6 加入後才比）
+// golden 設定案例（一案例一測試；fingerprint 由 diagnostics 模組比對，S2.6）
 // ---------------------------------------------------------------------------
 
 /// 讀 golden 設定案例並比對 `value`、`error`、`logs`；`known-differences.json`
@@ -146,7 +147,8 @@ async fn run_golden_config_case(name: &str) {
 
     let (logger, logs) = recording_logger();
     let loader = YamlConfigLoader::new(logger);
-    let actual = match loader.load(&format!("{base}.config.yml"), &env).await {
+    let loaded = loader.load(&format!("{base}.config.yml"), &env).await;
+    let actual = match &loaded {
         Ok(value) => serde_json::json!({ "value": value.to_json() }),
         Err(error) => serde_json::json!({
             "error": { "name": error.name(), "message": error.message() },
@@ -158,10 +160,19 @@ async fn run_golden_config_case(name: &str) {
             "logs".to_string(),
             serde_json::Value::Array(logs.lock().expect("logs lock").clone()),
         );
+        // S2.6：載入成功時比對 fingerprint（golden 由舊版
+        // `createSafeConfigFingerprint` 產生）；錯誤案例沒有 fingerprint。
+        if let Ok(value) = &loaded {
+            entries.insert(
+                "fingerprint".to_string(),
+                serde_json::Value::String(create_safe_config_fingerprint(value)),
+            );
+        }
     }
 
-    // 比對 expected 有的每個鍵（fingerprint 於 S2.6 加入後才比）。
-    for key in ["value", "error", "logs"] {
+    // 比對 expected 有的每個鍵（fingerprint 只在 expected 有該鍵時比對：
+    // 錯誤案例與 X1／X2 的 known-differences expected 都沒有這個鍵）。
+    for key in ["value", "error", "logs", "fingerprint"] {
         if let Some(expected_part) = expected.get(key) {
             let actual_part = actual.get(key).unwrap_or(&serde_json::Value::Null);
             assert!(
