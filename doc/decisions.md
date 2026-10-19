@@ -114,6 +114,7 @@
 - 理由：設定檔（config.yml）不會出現 %YAML 指示詞、tab 縮排或 doc-end 開頭檔；要改行為前應先在 `tools/ref/make-yaml-cases.sh` 補案例、重產 golden（§7.1）。
 - 影響：A/B 比對（§10）若在設定檔出現差異，先回來查此筆。另一個規格解讀：alias 鍵或「解析型別不同但字串化後相同」的鍵（如 `? 1` 與 `? "1"`、兩個 `.nan`），yaml 套件在 toJS 時覆寫原位置、不報錯；§7.1 的「重複的鍵在建立時就報錯」由組合階段的 `uniqueKeys` 檢查（僅比較標量鍵的解析值）實現，Rust 版照 yaml 套件行為覆寫，沒有為此新增第二種重複鍵錯誤。
 
+
 ## DEC-013 config 形狀型別在使用端先行定義（S2.1／S2.5）
 
 - 日期：2026-10-19（步驟：S2.1 剩餘＋S2.5 剩餘）
@@ -121,3 +122,12 @@
 - 決定：先在 `src/sessions/recovery.rs`／`src/app/resource_guard.rs` 定義同形狀的 `pub(crate)` 型別並附模組文件；S2.2 loader 與 S3.2 CgroupV2Reader 落地後改為重用 config 模組的型別、刪除本處定義。
 - 理由：並行分工的檔案邊界（禁止改 `src/config/`）不應阻擋純邏輯模組的移植；同形狀欄位（名稱、型別）與舊版一致，統一時只改 import 與建構處。
 - 影響：S2.2 合併時需要一次統一 refactor；合併前 `resource_guard.rs` 內也移植了 `mib_to_bytes`／`bytes_to_mib_number`（thresholds 移植後會重複，統一時刪除）。其他次要差異：`truncate_text` 在 `diagnostics.rs` 與 `channel_url.rs` 各有一份（UTF-16 語意、各測正確，統一時合併）；Rust `trim` 不含 `U+FEFF`（僅影響無測試覆蓋的邊界）；空 `pageCrashBackoffSeconds` 舊版得 NaN、Rust 以 0 秒對應（u64 界域）。
+
+## DEC-014 `probe` 子命令以 bin 內 `#[path]` 掛載模組樹（S1.4）
+
+- 日期：2026-10-19（步驟：S1.4）
+- 問題：`twiclaimer probe` 需要 `pub(crate)` 的 cdp／logging 型別，但 bin 與 lib 是兩個 crate；`lib.rs` 在該步驟的禁改清單（無法改 `pub(crate)` 為 `pub`）。
+- 決定：在 `src/main.rs` 以 `#[path]` 把 `browser`／`logging` 模組樹掛進 bin crate（同一批原始檔 lib／bin 各編譯一次），S3.6 接線 `AppRunner` 時把 probe 改為呼叫 lib 的公開 API、移除 bin 內掛載。
+- 理由：probe 的唯一目的（G2／G3 錄製比對）要與正式碼共用同一份實作；`#[path]` 是暫行手段，不改變 lib 的 API 形狀。
+- 影響：bin 編譯時間變長；若 lib 的模組可見性後續放寬（S3），此段跟著移除。
+- 另：`scripts/compare-traces.sh` 原用 `"$name：…"`，macOS 內建 bash 3.2 解析多 byte 變數名會誤報 unbound variable，已改 `${name}：…`（bash 3.2 相容寫法）。
