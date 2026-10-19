@@ -2,6 +2,7 @@
 pub mod app;
 pub mod browser;
 pub mod config;
+pub mod credentials;
 pub mod logging;
 pub mod scheduler;
 pub mod sessions;
