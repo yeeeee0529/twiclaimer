@@ -1,8 +1,13 @@
 # 進度
 
-- 目前步驟：等 S3.3 BrowserManager（`wt/s33-manager`，types.rs traits＋49 個舊測試＋e2e 第 2 個）完成合併後暫停（使用者指示）；S1 全階段（S1.1–S1.8）、S2 階段（S2.1–S2.6）、S3.1、S3.2 全部完成
+- 目前狀態：**暫停中（使用者指示）**。S1 全階段（S1.1–S1.8）、S2 階段（S2.1–S2.6）、S3.1–S3.3 全部完成；無執行中的代理
 - DEC-013 統一已完成（`c187b42`）：`sessions/recovery.rs` 與 `app/resource_guard.rs` 改用 `config::model`／`config::thresholds`（thresholds 的 bytes 以 u128 對應 JS bigint，使用處經 u128::from 無損轉換）；`CgroupSnapshot`／`CgroupMemoryEvents` 仍在 `app/resource_guard.rs`，等 S3.2 reader 落地時移過去
-- 觀察到的既有不穩定：`tests::browser_launch::cancelling_close_kills_a_browser_that_ignores_browser_close`（S1.3 假瀏覽器測試，非 ignore）在全套平行跑時失敗過一次（process group 收屍時序），單跑與後續全跑皆通過；持續觀察，若再現就檢查收屍等待的確定性
+- 觀察到的既有不穩定：
+  - `tests::browser_launch::cancelling_close_kills_a_browser_that_ignores_browser_close`（S1.3 假瀏覽器測試，非 ignore）在全套平行跑時失敗過一次（process group 收屍時序），單跑與後續全跑皆通過；持續觀察
+  - `tests::browser_diagnostics::page_adapter_converts…`（S1.6 e2e）2026-10-20 在 `--ignored --test-threads=2` 全量跑失敗一次，單跑與重跑全量皆過
+  - `tests::multi_page::sigkill…`（S1.8 e2e）同日同模式失敗一次——查出是 S1.8 寫時尚未有 X7 前綴的**過時斷言**（已依 pw-errors.jsonl 修正為 `page.evaluate: …`），修正後全量重跑全過
+  - `tests::browser_diagnostics::browser_manager_logs…`（S3.3 e2e）2026-10-20 首次全量跑失敗一次，單跑與重跑全量皆過
+  - 共同特徵：都在平行負載下的 e2e 時序敏感斷言；若再現就收緊 `eventually` 的輪詢視窗
 - 卡住的項目：無
 
 ## 階段
@@ -39,7 +44,7 @@
 | S2 關卡 | 未開始 | | | | |
 | S3.1 | 完成 | 2026-10-20 | 0.2 天 | `src/twitch/{api,live_status,errors}.rs`：Helix client＋transport trait 注入（預設 `ReqwestTransport`：HTTP/1.1、不讀 proxy 環境變數，照舊版 Node fetch；2 個整合測試用本機 ephemeral server）＋token 單飛（watch channel）＋直播狀態解析；**22 個舊測試全移植（port-coverage strict 22/22）**＋7 個直接測試；逾時用 `start_paused` 虛擬時間驗證 | 
 | S3.2 | 完成 | 2026-10-20 | 0.3 天 | `app/{cgroup,resource_monitor,restart,stall_watchdog}.rs`：**24 個舊測試全移植（port-coverage strict 24/24）**；cgroup root／時鐘／Docker client／fs 以 DI 注入（`RecoveryClock` 前例），邏輯本體在 macOS 可測、僅平台預設路徑（`/sys/fs/cgroup`、`/proc`）cfg(linux)——Docker test stage 驗證；`CgroupSnapshot`／`CgroupMemoryEvents` 依 DEC-013 從 `resource_guard.rs` 移到 `app/cgroup.rs`（resource_guard 改 re-import）。代理回報亂碼中斷、未 commit——四模組程式碼完整留存，主會話清掉 12 個機械性 clippy 錯誤後收尾 commit（`6f073c7`） | 
-| S3.3 | 未開始 | | | | |
+| S3.3 | 完成 | 2026-10-20 | 0.3 天 | `browser/types.rs`（D12：trait 對應 `types.ts` 介面；具體型別的 impl 全在新檔，cdp／page_adapter 零改動）＋`browser/manager.rs`（生命週期、重啟退避、generation、診斷分級轉發、writeback `update_config` 接點）；**49 個舊測試全移植（port-coverage strict 49/49）**＋e2e `browser_manager_logs…`（manager 以 channel 與 generation 記錄消毒後診斷）通過；`ExclusiveQueue` 交棒時跳過已取消的等待者（排隊 future 被取消會卡隊列——真 bug 修復）。代理無回報文字但 3 個增量 commit＋主會話收尾 commit 完整留存 | 
 | S3.4 | 未開始 | | | | |
 | S3.5 | 未開始 | | | | |
 | S3.6 | 未開始 | | | | |
