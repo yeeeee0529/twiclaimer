@@ -38,6 +38,7 @@ use super::connection::Event;
 use super::context::{ContextShared, DriverError, InterceptionKind};
 use super::injected::InjectedScript;
 use super::launcher::{CancelListener, LaunchedBrowser};
+use crate::browser::diagnostics::extract_graph_ql_operation_names;
 
 /// 導覽等待的預設逾時（§7.4：30 000 ms；`setDefaultNavigationTimeout` 覆寫）。
 const DEFAULT_NAVIGATION_TIMEOUT_MS: u64 = 30_000;
@@ -47,8 +48,6 @@ const MAX_HOST_LENGTH: usize = 128;
 const MAX_PATH_LENGTH: usize = 256;
 const MAX_MESSAGE_LENGTH: usize = 500;
 const MAX_FAILURE_TEXT_LENGTH: usize = 300;
-const MAX_GRAPHQL_OPERATION_NAMES: usize = 5;
-const MAX_GRAPHQL_OPERATION_NAME_LENGTH: usize = 64;
 
 /// `browser-diagnostics.ts` 的 `REDACTED_URL`。
 const REDACTED_URL: &str = "[REDACTED]";
@@ -944,7 +943,9 @@ impl PageShared {
                     resource_type: previous.resource_type.clone(),
                     status: status as u32,
                     status_text,
-                    graphql_operation_names: graphql_operation_names(previous.post_data.as_deref()),
+                    graphql_operation_names: extract_graph_ql_operation_names(
+                        previous.post_data.as_deref(),
+                    ),
                 });
             }
             // 登記（或以 redirect 的新請求覆寫）。
@@ -1014,7 +1015,7 @@ impl PageShared {
                 .and_then(Value::as_str)
                 .unwrap_or_default()
                 .to_string(),
-            graphql_operation_names: graphql_operation_names(record.post_data.as_deref()),
+            graphql_operation_names: extract_graph_ql_operation_names(record.post_data.as_deref()),
         });
     }
 
@@ -1052,7 +1053,7 @@ impl PageShared {
             method: record.method.clone(),
             resource_type: record.resource_type.clone(),
             failure_text,
-            graphql_operation_names: graphql_operation_names(record.post_data.as_deref()),
+            graphql_operation_names: extract_graph_ql_operation_names(record.post_data.as_deref()),
         });
     }
 
@@ -1885,47 +1886,6 @@ fn post_data_text(request: &Value) -> Option<String> {
         return None;
     }
     Some(entries.join(""))
-}
-
-/// GraphQL POST body 的 `operationName` 清單（照舊版 `extractGraphQlOperationNames`）。
-fn graphql_operation_names(post_data: Option<&str>) -> Vec<String> {
-    let Some(post_data) = post_data else {
-        return Vec::new();
-    };
-    if post_data.is_empty() {
-        return Vec::new();
-    }
-    let Ok(parsed) = serde_json::from_str::<Value>(post_data) else {
-        return Vec::new();
-    };
-    let candidates = if parsed.is_array() {
-        parsed.as_array().cloned().unwrap_or_default()
-    } else {
-        vec![parsed]
-    };
-    let mut names: Vec<String> = Vec::new();
-    for candidate in candidates {
-        let Some(operation_name) = candidate
-            .get("operationName")
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .filter(|name| !name.is_empty())
-        else {
-            continue;
-        };
-        let bounded = truncate_text(
-            &crate::logging::redact::redact_sensitive_string(operation_name),
-            MAX_GRAPHQL_OPERATION_NAME_LENGTH,
-        );
-        if names.contains(&bounded) {
-            continue;
-        }
-        names.push(bounded);
-        if names.len() >= MAX_GRAPHQL_OPERATION_NAMES {
-            break;
-        }
-    }
-    names
 }
 
 /// 把值轉成 JS `String(value)` 的形式（console preview 與診斷文字用）。

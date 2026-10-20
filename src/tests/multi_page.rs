@@ -482,11 +482,12 @@ async fn sigkill_browser_reports_disconnected_within_one_second() {
     assert_eq!(close_count.load(Ordering::SeqCst), 1, "on_close 應觸發一次");
 
     // 之後的操作回 `Target page, context or browser has been closed`（§7.3.1）。
+    // X7：message 帶 `<api>: ` 前綴（照 pw-errors.jsonl 的 closed-evaluate 案例）。
     let error = page.evaluate("1".to_string()).await.unwrap_err();
     assert_eq!(error.name, "Error");
     assert_eq!(
         error.message,
-        "Target page, context or browser has been closed"
+        "page.evaluate: Target page, context or browser has been closed"
     );
 
     // 無孤兒程序：kill 的是主程序，子程序應隨瀏覽器結束一併離開。
