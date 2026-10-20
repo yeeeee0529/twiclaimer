@@ -1,6 +1,6 @@
 # 進度
 
-- 目前步驟：S1.5 Locator（`wt/s15-locator`，進行中）＋S1.8 多頁面與 crash（即將派出）；S1.4、S1.6 與 S2 階段（S2.1–S2.6）全部完成
+- 目前步驟：S1.5 Locator（`wt/s15-locator`，接手代理 4 階段增量 commit 進行中）；S1.4、S1.6、S1.8（macOS 可驗部分）與 S2 階段全部完成
 - DEC-013 統一已完成（`c187b42`）：`sessions/recovery.rs` 與 `app/resource_guard.rs` 改用 `config::model`／`config::thresholds`（thresholds 的 bytes 以 u128 對應 JS bigint，使用處經 u128::from 無損轉換）；`CgroupSnapshot`／`CgroupMemoryEvents` 仍在 `app/resource_guard.rs`，等 S3.2 reader 落地時移過去
 - 觀察到的既有不穩定：`tests::browser_launch::cancelling_close_kills_a_browser_that_ignores_browser_close`（S1.3 假瀏覽器測試，非 ignore）在全套平行跑時失敗過一次（process group 收屍時序），單跑與後續全跑皆通過；持續觀察，若再現就檢查收屍等待的確定性
 - 卡住的項目：無
@@ -28,7 +28,7 @@
 | S1.5 | 未開始 | | | | |
 | S1.6 | 完成 | 2026-10-19 | 0.2 天 | `PlaywrightBrowserPageAdapter` 移植（`src/browser/page_adapter.rs`）：三個診斷 listener、`sanitizeBrowserUrl`／`joinSanitizedUrl`／redact／UTF-16 截斷與省略條件照舊版；**9 個舊測試全移植（port-coverage strict 9/9）**＋1 補測；e2e `browser_diagnostics`（本機 TCP 伺服器取代 `page.route`）通過且連跑 4 次穩定。extraction 照 DEC-006 重用 `diagnostics.rs` 純函式；吞錯以 `catch_unwind` 表達。債：page.rs 事件泵的內聯 GraphQL 抽出改接純函式，留到 S1.5 合併後由主會話處理；e2e 第 2 個在 S3.3 | 
 | S1.7 | 未開始 | | | | |
-| S1.8 | 未開始 | | | | |
+| S1.8 | 完成（macOS 可驗部分） | 2026-10-19 | 0.1 天 | 4 個 e2e（`src/tests/multi_page.rs`）：3 頁併發＋診斷歸屬與截圖隔離、popup 收到即關（`on_popup`→`close()`，opener 不受影響）、`goto("chrome://crash")` 注入 crash（A `on_crash` 恰一次、B／C 不受影響）、SIGKILL 後 `on_disconnected` < 1 秒＋無孤兒；8 個 e2e 重跑 4 次全綠。**G9 的 RSS ≤ 40 MiB 只能在 Docker 量測**（macOS 無 `/proc`；probe `--hold 3` 已實測 exit 0）。待整合（S1.5 合併時一併處理）：crashed 頁 session 需照 Playwright `_markAsCrashed()` 短線路回 `Target crashed `；`PageShared::close()` crashed 時仍要送 `Target.closeTarget` | 
 | S1 關卡 | 未開始 | | | | |
 | S2.1 | 完成 | 2026-10-19 | 0.3 天 | 消毒層（13）＋ Logger 本體（11）＋ `browser-diagnostics` 純函式（`extract_graph_ql_operation_names`／`decide_*_level`／`truncate_text`，10 個舊測試；另 6 個已由 channel_url 處置）＋ `safe_logging.rs`（舊碼無專屬測試，補測 3 個）。port-coverage strict 35/35。本步驟全部完成 | 5213e0a |
 | S2.2 | 完成 | 2026-10-19 | 0.5 天 | `parse_yaml`（13/13 golden）＋`ConfigLoader`（欄位驗證順序／訊息、`${VAR}`、15 個 env 覆寫、X1 browser.engine、X2 headless）＋`model.rs`（f64 忠實 JS number、`to_json()`）＋thresholds（5）＋**9/9 config golden**（fingerprint 留 S2.6）。config.test.ts 24＋11 it.each＋thresholds 5 全移植（X2 檢查放 buildConfig 最後以守住原驗證順序）。寫回屬 S2.3 | 0ead197 |
