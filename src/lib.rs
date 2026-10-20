@@ -6,6 +6,7 @@ pub mod credentials;
 pub mod logging;
 pub mod scheduler;
 pub mod sessions;
+pub(crate) mod twitch;
 
 /// 跨模組整合測試與 e2e（計畫 §4.1）。
 #[cfg(test)]
