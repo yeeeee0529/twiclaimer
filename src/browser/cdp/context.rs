@@ -56,6 +56,38 @@ impl DriverError {
     pub(crate) fn target_closed() -> Self {
         DriverError::new("Error", "Target page, context or browser has been closed")
     }
+
+    /// crash 的錯誤（照 dispatcher 對 crashed ProtocolError 的改寫
+    /// `Target crashed <browser logs>`；沒有 browser logs 時保留尾端一個空白，
+    /// X7 的 after-crash-evaluate 案例）。
+    pub(crate) fn crashed() -> Self {
+        DriverError::new("Error", "Target crashed ")
+    }
+
+    /// 是否為 crash 錯誤（拒絕 pending 與後續指令時的訊息）。
+    pub(crate) fn is_crashed(&self) -> bool {
+        self.name == "Error" && self.message == "Target crashed "
+    }
+
+    /// 逾時（X7：`Timeout <ms>ms exceeded.`；`TimeoutError` 名稱）。
+    pub(crate) fn timeout(ms: u128) -> Self {
+        DriverError::new("TimeoutError", format!("Timeout {ms}ms exceeded."))
+    }
+
+    /// 加上 `<api>: ` 前綴（X7：`message` 為 `<api>: <內容>`，只保留第一行——
+    /// 內容在產生時已是第一行，這裡只補前綴）。
+    pub(crate) fn with_api(mut self, api: &str) -> Self {
+        self.message = format!("{api}: {}", self.message);
+        self
+    }
+
+    /// execution context 被導覽摧毀（frames.ts 重試迴圈視為可重試：換新 context
+    /// 後元素可能回來）。
+    pub(crate) fn is_context_destroyed(&self) -> bool {
+        self.name == "Error"
+            && self.message
+                == "Execution context was destroyed, most likely because of a navigation."
+    }
 }
 
 impl std::fmt::Display for DriverError {
@@ -69,6 +101,7 @@ impl From<CdpError> for DriverError {
         match error {
             CdpError::Protocol { message, .. } => DriverError::new("Error", message),
             CdpError::TargetClosed => DriverError::target_closed(),
+            CdpError::Crashed => DriverError::crashed(),
         }
     }
 }
@@ -622,7 +655,11 @@ impl BrowserContextAdapter {
     /// 建立頁面（§7.3.4）：`Target.createTarget {browserContextId, url: "about:blank"}`
     /// 並等 auto-attach 的初始化完成才回傳。
     pub(crate) async fn new_page(&self) -> Result<PageAdapter, DriverError> {
-        let page = self.shared.create_target_page(false).await?;
+        let page = self
+            .shared
+            .create_target_page(false)
+            .await
+            .map_err(|error| error.with_api("browserContext.newPage"))?;
         Ok(PageAdapter { shared: page })
     }
 

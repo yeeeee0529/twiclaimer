@@ -589,14 +589,16 @@ impl LaunchedBrowser {
         self.disconnected.on_disconnected(listener)
     }
 
-    /// 送出一則 CDP 指令，等回應（§7.3.2）。連線已斷時回 [`CdpError::TargetClosed`]。
+    /// 送出一則 CDP 指令，等回應（§7.3.2）。
+    ///
+    /// 連線已斷時回 [`CdpError::TargetClosed`]；session 已 crash 時回
+    /// [`CdpError::Crashed`]（照 `CRSession.send` 的檢查，訊息含尾端空白）。
     pub(crate) async fn send_command(
         &self,
         session: Option<&str>,
         method: &str,
         params: Value,
     ) -> Result<Value, CdpError> {
-        // 回應接收端被丟棄（連線收尾時清理等待者）視同 TargetClosed。
         match self
             .connection
             .send_command(session, method, params)
@@ -604,8 +606,23 @@ impl LaunchedBrowser {
             .await
         {
             Ok(result) => result,
+            // 內層的 CdpError（含 Crashed）照原樣上拋；接收端被整個丟棄
+            //（Router 消失）才會走 RecvError，視為 TargetClosed。
             Err(_) => Err(CdpError::TargetClosed),
         }
+    }
+
+    /// 標記 session 已 crash（照 `crConnection.ts` 的 `CRSession._markAsCrashed`）：
+    /// 之後送到這個 session 的指令立即失敗（`Target crashed `）。
+    pub(crate) fn mark_session_crashed(&self, session_id: &str) {
+        self.connection.mark_session_crashed(session_id);
+    }
+
+    /// 拒絕 crash session 的 pending 指令（事件泵在 `Inspector.targetCrashed` 時呼叫）。
+    pub(crate) async fn fail_crashed_session_pending(&self, session_id: &str) {
+        self.connection
+            .fail_crashed_session_pending(session_id)
+            .await;
     }
 
     /// 登記一個子 session（嵌套 auto-attach），取得事件接收端（S1.4）。

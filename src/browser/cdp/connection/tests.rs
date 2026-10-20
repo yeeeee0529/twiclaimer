@@ -3,6 +3,7 @@
 use std::time::Duration;
 
 use super::{CdpError, Connection, DetachedSession, EVENT_CHANNEL_CAPACITY, Router, SessionNotice};
+use crate::browser::cdp::context::DriverError;
 use crate::browser::cdp::transport::encode_message;
 use serde_json::json;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream};
@@ -485,4 +486,77 @@ async fn register_and_unregister_session_through_connection() {
     let cancelled = connection.unregister_session("worker-1").await;
     assert_eq!(cancelled, vec![1]);
     assert_eq!(rx.await.unwrap(), Err(CdpError::TargetClosed));
+}
+
+// ===== crash 的 session（缺口 1：照 CRSession._markAsCrashed）=====
+
+#[test]
+fn crashed_session_fails_pending_commands_with_target_crashed() {
+    let mut router = Router::new();
+    let (_id, mut rx) = request(&mut router, Some("p1"));
+    // 其他 session 與 browser session 的指令不受影響。
+    let (_other, other_rx) = request(&mut router, Some("p2"));
+    let (_browser, browser_rx) = request(&mut router, None);
+
+    router.fail_session_pending_crashed("p1");
+    let reply = rx.try_recv().unwrap();
+    assert_eq!(reply, Err(CdpError::Crashed));
+    // 訊息結尾有一個空白（照 pw-errors.jsonl 的 after-crash-evaluate 案例）。
+    assert_eq!(reply.unwrap_err().message(), "Target crashed ");
+    assert_eq!(router.pending_count(), 2);
+    assert!(!other_rx.is_terminated());
+    assert!(!browser_rx.is_terminated());
+}
+
+#[tokio::test]
+async fn crashed_session_rejects_pending_and_later_commands() {
+    let (connection, _notices, browser) = spawn_connection();
+    // 一個已送出但不會有回應的指令（模擬 crash 前的 in-flight）。
+    let pending = connection
+        .send_command(Some("p1"), "Runtime.evaluate", json!({}))
+        .await;
+    // crash：先擋後續（同步），再拒絕 pending（背景）。
+    connection.mark_session_crashed("p1");
+    connection.fail_crashed_session_pending("p1").await;
+
+    assert_eq!(
+        pending.await.unwrap(),
+        Err(CdpError::Crashed),
+        "crash 時 pending 的指令應被拒絕"
+    );
+    // 之後送到 crash session 的指令立即失敗（不會卡住）。
+    let later = connection
+        .send_command(Some("p1"), "Runtime.evaluate", json!({}))
+        .await;
+    assert_eq!(
+        tokio::time::timeout(Duration::from_millis(500), later)
+            .await
+            .unwrap()
+            .unwrap(),
+        Err(CdpError::Crashed)
+    );
+    // browser session 不受影響。
+    spawn_mock_browser(browser);
+    let rx = connection
+        .send_command(None, "Browser.getVersion", json!({}))
+        .await;
+    assert!(
+        rx.await.unwrap().is_ok(),
+        "browser session 不受頁面 crash 影響"
+    );
+}
+
+#[test]
+fn driver_error_crashed_helpers() {
+    let error = DriverError::crashed();
+    assert_eq!(error.name, "Error");
+    assert_eq!(error.message, "Target crashed ");
+    assert!(error.is_crashed());
+    assert!(!error.is_context_destroyed());
+    // X7 前綴保留尾端空白。
+    assert_eq!(
+        error.with_api("page.evaluate").message,
+        "page.evaluate: Target crashed "
+    );
+    assert!(!DriverError::target_closed().is_crashed());
 }

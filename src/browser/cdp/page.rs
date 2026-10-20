@@ -36,6 +36,7 @@ use tokio::sync::{mpsc, watch};
 
 use super::connection::Event;
 use super::context::{ContextShared, DriverError, InterceptionKind};
+use super::injected::InjectedScript;
 use super::launcher::{CancelListener, LaunchedBrowser};
 
 /// 導覽等待的預設逾時（§7.4：30 000 ms；`setDefaultNavigationTimeout` 覆寫）。
@@ -72,19 +73,22 @@ impl WaitUntil {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct PageSnapshot {
     /// 主框架目前的 URL（`frameNavigated`／`navigatedWithinDocument` 追蹤）。
-    url: String,
+    pub(crate) url: String,
     /// 目前文件的 loaderId（生命週期事件以此對應文件）。
-    loader_id: String,
-    domcontentloaded: bool,
-    load: bool,
-    closed: bool,
-    crashed: bool,
+    pub(crate) loader_id: String,
+    pub(crate) domcontentloaded: bool,
+    pub(crate) load: bool,
+    pub(crate) closed: bool,
+    pub(crate) crashed: bool,
     /// 主框架 main world 的 execution context id（`evaluate` 用；導覽會摧毀）。
-    context_id: Option<i64>,
+    pub(crate) context_id: Option<i64>,
     /// 主框架「跨文件 commit」的累計次數（`frameNavigated`；判斷導覽被取代用）。
-    commit_count: u64,
+    pub(crate) commit_count: u64,
     /// 同文件導覽的累計次數（`page.goto` 的同文件等待用）。
-    same_document_commits: u64,
+    pub(crate) same_document_commits: u64,
+    /// 主框架被請求導覽的累計次數（`Page.frameRequestedNavigation`；click 的
+    /// `waitForSignalsCreatedBy` 觀察動作觸發的導覽用）。
+    pub(crate) navigation_requests: u64,
 }
 
 /// 診斷事件（S1.4：照 §7.5 的 CDP 來源翻譯；S1.6 再精修消毒與分級）。
@@ -212,6 +216,8 @@ pub(crate) struct PageShared {
     navigation_timeout_ms: AtomicU64,
     /// 攔截與網路狀態（鎖內不做 await）。
     network: Mutex<NetworkState>,
+    /// 主框架 main world 的 injected script 把手（X8；事件泵在 context 變動時清空）。
+    injected: InjectedScript,
     closed: AtomicBool,
     crashed: AtomicBool,
     /// 初始化成功的頁面（照 Playwright 的 `initializedOrUndefined`）。
@@ -254,6 +260,7 @@ impl PageShared {
             main_frame_id: Mutex::new(String::new()),
             navigation_timeout_ms: AtomicU64::new(DEFAULT_NAVIGATION_TIMEOUT_MS),
             network: Mutex::new(NetworkState::default()),
+            injected: InjectedScript::default(),
             closed: AtomicBool::new(false),
             crashed: AtomicBool::new(false),
             initialized: AtomicBool::new(false),
@@ -289,6 +296,37 @@ impl PageShared {
     /// 目前的 URL（`page.url()`）。
     pub(crate) fn url(&self) -> String {
         self.snapshot.borrow().url.clone()
+    }
+
+    /// 狀態 watch 的訂閱端（click 的導覽等待用）。
+    pub(crate) fn subscribe_snapshot(&self) -> watch::Receiver<PageSnapshot> {
+        self.snapshot.subscribe()
+    }
+
+    /// 導覽的累計計數（requested、跨文件 commit、同文件 commit；
+    /// click 的 `waitForSignalsCreatedBy` 觀察動作觸發的導覽用）。
+    pub(crate) fn navigation_counters(&self) -> (u64, u64, u64) {
+        let snapshot = self.snapshot.borrow();
+        (
+            snapshot.navigation_requests,
+            snapshot.commit_count,
+            snapshot.same_document_commits,
+        )
+    }
+
+    /// 是否有「已請求但尚未收尾」的導覽（照 `frame._pendingDocument`：
+    /// requested 計數超過已收尾的導覽數）。
+    pub(crate) fn has_pending_navigation(&self) -> bool {
+        let snapshot = self.snapshot.borrow();
+        snapshot.navigation_requests
+            > snapshot
+                .commit_count
+                .saturating_add(snapshot.same_document_commits)
+    }
+
+    /// 主框架 main world 的 injected script 把手（locator／evaluate 用）。
+    pub(crate) fn injected(&self) -> &InjectedScript {
+        &self.injected
     }
 
     /// 導覽逾時（毫秒）。
@@ -328,7 +366,15 @@ impl PageShared {
     }
 
     /// 送出一則頁面 session 的指令（等回應）。
-    async fn send(&self, method: &str, params: Value) -> Result<Value, DriverError> {
+    ///
+    /// 頁面已關閉時不送出、立即回已關閉錯誤（照 Playwright 的
+    /// LongStandingScope：close 之後的指令一律 `Target page, context or
+    /// browser has been closed`——不然 Chromium 會回「Session with given id
+    /// not found」，訊息不同）。
+    pub(crate) async fn send(&self, method: &str, params: Value) -> Result<Value, DriverError> {
+        if self.is_closed() {
+            return Err(DriverError::target_closed());
+        }
         self.browser
             .launched
             .send_command(Some(&self.session_id), method, params)
@@ -340,7 +386,7 @@ impl PageShared {
     ///
     /// 指令在 Router 鎖內排隊，順序與事件泵的處理順序一致；不等回應避免堵住
     /// 事件泵（瀏覽器要收到 continue 才會繼續送事件）。
-    fn send_may_fail(&self, method: &str, params: Value) {
+    pub(crate) fn send_may_fail(&self, method: &str, params: Value) {
         let launched = Arc::clone(&self.browser.launched);
         let session = self.session_id.clone();
         let method = method.to_string();
@@ -706,6 +752,15 @@ impl PageShared {
                     page.on_lifecycle_event(name, loader_id);
                 }
             }
+            // 主框架被請求的導覽（click 的 waitForSignalsCreatedBy 等它收尾）。
+            "Page.frameRequestedNavigation" => {
+                let frame_id = event.params.get("frameId").and_then(Value::as_str);
+                if main && frame_id == Some(page.main_frame_id().as_str()) {
+                    let mut snapshot = page.snapshot.borrow().clone();
+                    snapshot.navigation_requests += 1;
+                    let _ = page.snapshot.send(snapshot);
+                }
+            }
             // execution context（evaluate 用；worker 的第一個 context 也走這裡）。
             "Runtime.executionContextCreated" => {
                 let context = event.params.get("context").cloned().unwrap_or(Value::Null);
@@ -723,6 +778,8 @@ impl PageShared {
                     && context_frame == Some(page.main_frame_id().as_str())
                     && let Some(context_id) = context_id
                 {
+                    // 舊 context 的 injected 物件已失效：對不上新 id 時清空（X8）。
+                    page.injected.invalidate_on_new_context(context_id);
                     let mut snapshot = page.snapshot.borrow().clone();
                     snapshot.context_id = Some(context_id);
                     let _ = page.snapshot.send(snapshot);
@@ -733,6 +790,14 @@ impl PageShared {
                     .params
                     .get("executionContextId")
                     .and_then(Value::as_i64);
+                // injected script 隨 execution context 摧毀（X8）：丟棄建立的物件，
+                // 下次使用重建（只有頁面主 session 的事件決定主框架的 context）。
+                if main {
+                    match event.method.as_str() {
+                        "Runtime.executionContextDestroyed" => page.injected.invalidate(destroyed),
+                        _ => page.injected.invalidate(None),
+                    }
+                }
                 let mut snapshot = page.snapshot.borrow().clone();
                 let matches = match (event.method.as_str(), destroyed, snapshot.context_id) {
                     ("Runtime.executionContextDestroyed", Some(id), Some(current)) => id == current,
@@ -752,8 +817,20 @@ impl PageShared {
             "Fetch.authRequired" => PageShared::on_auth_required(page, &event.params),
             "Runtime.consoleAPICalled" => PageShared::on_console_api_called(page, &event.params),
             "Log.entryAdded" => PageShared::on_log_entry_added(page, &event.params),
-            // crash（§7.3.5 的 on_crash 來源）。
-            "Inspector.targetCrashed" => Arc::clone(page).did_crash(),
+            // crash（§7.3.5 的 on_crash 來源）：照 `crPage._onTargetCrashed` →
+            // `crConnection.CRSession._markAsCrashed()`——先擋住後續指令（同步），
+            // pending 的拒絕交給背景任務（事件泵內不持鎖時不再鎖同一鎖）。
+            "Inspector.targetCrashed" if main => {
+                page.browser.launched.mark_session_crashed(&page.session_id);
+                let launched = Arc::clone(&page.browser.launched);
+                let session = page.session_id.clone();
+                tokio::spawn(async move {
+                    launched.fail_crashed_session_pending(&session).await;
+                });
+                Arc::clone(page).did_crash();
+            }
+            // 非 main session（worker 等）的 crash：不影響頁面本體的狀態。
+            "Inspector.targetCrashed" => {}
             // 嵌套 auto-attach：worker 與 OOPIF（§7.3.4）。
             "Target.attachedToTarget" if !main => {}
             "Target.attachedToTarget" => {
@@ -1344,10 +1421,10 @@ impl PageShared {
         }
     }
 
-    /// 導覽等待在頁面停止時的錯誤（crash → `Target crashed`；關閉 → 已關閉訊息）。
-    fn lifecycle_stop_error(&self) -> DriverError {
+    /// 導覽等待在頁面停止時的錯誤（crash → `Target crashed `；關閉 → 已關閉訊息）。
+    pub(crate) fn lifecycle_stop_error(&self) -> DriverError {
         if self.is_crashed() {
-            DriverError::new("Error", "Target crashed")
+            DriverError::crashed()
         } else {
             DriverError::target_closed()
         }
@@ -1356,8 +1433,15 @@ impl PageShared {
     // ===== evaluate（storageState 與 S1.5 用）=====
 
     /// 主框架 main world 的 `Runtime.evaluate`（storageState 的 localStorage 寫入；
-    /// S1.5 的 evaluate 沿用）。
+    /// S1.5 的 evaluate 沿用）。X7：訊息前綴 `page.evaluate`。
     pub(crate) async fn evaluate(&self, expression: String) -> Result<Value, DriverError> {
+        self.evaluate_expression(expression)
+            .await
+            .map_err(|error| error.with_api("page.evaluate"))
+    }
+
+    /// [`PageShared::evaluate`] 的本體（前綴由包裝補上）。
+    async fn evaluate_expression(&self, expression: String) -> Result<Value, DriverError> {
         let context_id = self.wait_main_world_context().await?;
         let reply = self
             .send(
@@ -1377,17 +1461,89 @@ impl PageShared {
         }
         Ok(reply.get("result").cloned().unwrap_or(Value::Null))
     }
+    /// `page.evaluate(fn, arg)`（§7.4）：主框架 main world 以 `Runtime.callFunctionOn`
+    /// 呼叫函式（照 `crExecutionContext.ts` 的 `evaluateExpression`：函式宣告 +
+    /// `arguments: [{value: arg}]`、`returnByValue: true`、`awaitPromise: true`）。
+    ///
+    /// 例外照 `getExceptionMessage`（`Error: boom`）→ 只保留第一行（X7）；
+    /// 協定錯誤（非已關閉、非 crash）照 `rewriteError` 視為 context 被導覽摧毀；
+    /// 訊息前綴 `page.evaluate`。
+    pub(crate) async fn evaluate_function(
+        &self,
+        fn_declaration: &str,
+        arg: Option<Value>,
+    ) -> Result<Value, DriverError> {
+        self.evaluate_function_body(fn_declaration, arg)
+            .await
+            .map_err(|error| error.with_api("page.evaluate"))
+    }
+
+    /// [`PageShared::evaluate_function`] 的本體（前綴由包裝補上）。
+    async fn evaluate_function_body(
+        &self,
+        fn_declaration: &str,
+        arg: Option<Value>,
+    ) -> Result<Value, DriverError> {
+        let context_id = self.wait_main_world_context().await?;
+        // arg 為 None 時不帶 value 項（照 JSON.stringify 丟棄 undefined 的行為）。
+        let arguments = match arg {
+            Some(arg) => json!([{"value": arg}]),
+            None => json!([]),
+        };
+        let reply = self
+            .send(
+                "Runtime.callFunctionOn",
+                json!({
+                    "functionDeclaration": fn_declaration,
+                    "executionContextId": context_id,
+                    "arguments": arguments,
+                    "returnByValue": true,
+                    "awaitPromise": true,
+                    "userGesture": true,
+                }),
+            )
+            .await;
+        let reply = match reply {
+            Ok(reply) => reply,
+            Err(error) if error == DriverError::target_closed() => return Err(error),
+            // crash 的錯誤照原樣上拋（`Target crashed `）。
+            Err(error) if error.is_crashed() => return Err(error),
+            // 照 crExecutionContext 的 `rewriteError`：協定錯誤一律視為 context 摧毀。
+            Err(_) => {
+                return Err(DriverError::new(
+                    "Error",
+                    "Execution context was destroyed, most likely because of a navigation.",
+                ));
+            }
+        };
+        if let Some(details) = reply.get("exceptionDetails") {
+            return Err(DriverError::new(
+                "Error",
+                crate::browser::cdp::injected::first_line_of(&get_exception_message(details)),
+            ));
+        }
+        // `returnByValue: true`：值在 `result.value`（undefined 回傳時無 value 欄）。
+        Ok(reply
+            .get("result")
+            .and_then(|result| result.get("value"))
+            .cloned()
+            .unwrap_or(Value::Null))
+    }
 
     /// 等主框架 main world 的 execution context（導覽後重建；30 秒防線）。
-    async fn wait_main_world_context(&self) -> Result<i64, DriverError> {
+    pub(crate) async fn wait_main_world_context(&self) -> Result<i64, DriverError> {
         let mut snapshot_rx = self.snapshot.subscribe();
         let deadline = Instant::now() + Duration::from_secs(30);
         loop {
             if let Some(context_id) = snapshot_rx.borrow().context_id {
                 return Ok(context_id);
             }
-            if snapshot_rx.borrow().closed {
+            let snapshot = snapshot_rx.borrow().clone();
+            if snapshot.closed {
                 return Err(DriverError::target_closed());
+            }
+            if snapshot.crashed {
+                return Err(DriverError::crashed());
             }
             match tokio::time::timeout_at(deadline.into(), snapshot_rx.changed()).await {
                 Ok(Ok(())) => {}
@@ -1406,8 +1562,16 @@ impl PageShared {
     /// `page.goto(url, {waitUntil})`（§7.4）：`Page.navigate` → `errorText` 失敗 →
     /// 等新文件的 DOMContentLoaded／load；同文件導覽交給同程序（等待）。
     ///
-    /// 整個流程受導覽逾時限制（照 Playwright 的 progress）。
+    /// 整個流程受導覽逾時限制（照 Playwright 的 progress）；X7：訊息前綴
+    /// `page.goto`。
     pub(crate) async fn goto(&self, url: &str, wait_until: WaitUntil) -> Result<(), DriverError> {
+        self.goto_body(url, wait_until)
+            .await
+            .map_err(|error| error.with_api("page.goto"))
+    }
+
+    /// [`PageShared::goto`] 的本體（前綴由包裝補上）。
+    async fn goto_body(&self, url: &str, wait_until: WaitUntil) -> Result<(), DriverError> {
         let timeout = self.navigation_timeout();
         let navigation = async {
             let frame_id = self.main_frame_id();
@@ -1433,12 +1597,7 @@ impl PageShared {
         };
         tokio::time::timeout(timeout, navigation)
             .await
-            .map_err(|_| {
-                crate::browser::cdp::context::DriverError::new(
-                    "TimeoutError",
-                    format!("Timeout {}ms exceeded.", timeout.as_millis()),
-                )
-            })?
+            .map_err(|_| DriverError::timeout(timeout.as_millis()))?
     }
 
     /// storageState 的頁面導覽：同 `page.goto`，但等到 `load`（照 recordSession
@@ -1447,24 +1606,148 @@ impl PageShared {
         self.goto(url, WaitUntil::Load).await
     }
 
+    /// `page.goto` 的可中止版本（§7.4 的 `signal`）：`abort` 旗標在 select 點
+    /// 輪詢（10 ms），設真時回 `AbortError`（name=`AbortError`、
+    /// `page.goto: This operation was aborted`，X7 的前綴）。
+    pub(crate) async fn goto_abortable(
+        &self,
+        url: &str,
+        wait_until: WaitUntil,
+        abort: Option<Arc<AtomicBool>>,
+    ) -> Result<(), DriverError> {
+        match abort {
+            Some(flag) => {
+                tokio::select! {
+                    result = self.goto(url, wait_until) => result,
+                    // 偵測中止：10 ms 輪詢（等待迴圈的輪詢點檢查）。
+                    _ = abort_wait(&flag) => Err(DriverError::new(
+                        "AbortError",
+                        "This operation was aborted",
+                    ).with_api("page.goto")),
+                }
+            }
+            None => self.goto(url, wait_until).await,
+        }
+    }
+
+    /// `page.reload({waitUntil})`（§7.4）：`Page.reload` 之後同 `goto` 等**新文件**
+    /// 的生命週期（照 `page.ts` 的 `reload`：waitForNavigation(newDocument) 與
+    /// `Page.reload` 並行——watch 訂閱先建立，指令後送，效果相同）。
+    /// X7：訊息前綴 `page.reload`。
+    pub(crate) async fn reload(&self, wait_until: WaitUntil) -> Result<(), DriverError> {
+        self.reload_abortable(wait_until, None).await
+    }
+
+    /// `page.reload` 的可中止版本（同 [`PageShared::goto_abortable`]）。
+    pub(crate) async fn reload_abortable(
+        &self,
+        wait_until: WaitUntil,
+        abort: Option<Arc<AtomicBool>>,
+    ) -> Result<(), DriverError> {
+        let run = async {
+            let previous_loader = self.snapshot.borrow().loader_id.clone();
+            self.send("Page.reload", json!({})).await?;
+            self.wait_new_document_lifecycle(&previous_loader, wait_until)
+                .await
+        };
+        let timeout = self.navigation_timeout();
+        // 逾時包在裡層、abort 在外層監看；兩臂各自收斂成 `Result<(), DriverError>`
+        // （abort 不可被誤判成逾時——X7 的 `AbortError` 與 `TimeoutError` 不同）。
+        let result = match abort {
+            Some(flag) => {
+                tokio::select! {
+                    inner = tokio::time::timeout(timeout, run) => match inner {
+                        Ok(inner) => inner,
+                        Err(_) => Err(DriverError::timeout(timeout.as_millis())),
+                    },
+                    _ = abort_wait(&flag) => Err(DriverError::new(
+                        "AbortError",
+                        "This operation was aborted",
+                    )),
+                }
+            }
+            None => match tokio::time::timeout(timeout, run).await {
+                Ok(inner) => inner,
+                Err(_) => Err(DriverError::timeout(timeout.as_millis())),
+            },
+        };
+        result.map_err(|error| error.with_api("page.reload"))
+    }
+
+    /// `page.mouse.move(x, y)`（§7.4）：單一 `Input.dispatchMouseEvent
+    /// {type: 'mouseMoved'}`（照 crInput 的 move：無按鍵時 mask 0、force 0）。
+    pub(crate) async fn mouse_move(&self, x: f64, y: f64) -> Result<(), DriverError> {
+        self.send(
+            "Input.dispatchMouseEvent",
+            json!({
+                "type": "mouseMoved",
+                "button": "none",
+                "buttons": 0,
+                "x": x,
+                "y": y,
+                "modifiers": 0,
+                "force": 0,
+            }),
+        )
+        .await
+        .map(|_| ())
+    }
+
+    /// click 的 `mousePressed`（照 `input.ts` Mouse.down：button left、按下後的
+    /// buttons mask 1、clickCount 1、force 0.5）。
+    pub(crate) async fn mouse_press(&self, x: f64, y: f64) -> Result<(), DriverError> {
+        self.send(
+            "Input.dispatchMouseEvent",
+            json!({
+                "type": "mousePressed",
+                "button": "left",
+                "buttons": 1,
+                "x": x,
+                "y": y,
+                "modifiers": 0,
+                "clickCount": 1,
+                "force": 0.5,
+            }),
+        )
+        .await
+        .map(|_| ())
+    }
+
+    /// click 的 `mouseReleased`（照 `input.ts` Mouse.up：放開後的 buttons mask 0、
+    /// clickCount 1；無 force 欄）。
+    pub(crate) async fn mouse_release(&self, x: f64, y: f64) -> Result<(), DriverError> {
+        self.send(
+            "Input.dispatchMouseEvent",
+            json!({
+                "type": "mouseReleased",
+                "button": "left",
+                "buttons": 0,
+                "x": x,
+                "y": y,
+                "modifiers": 0,
+                "clickCount": 1,
+            }),
+        )
+        .await
+        .map(|_| ())
+    }
+
     /// `page.close()`（§7.3.4）：browser session 送 `Target.closeTarget`，等 target
-    /// 結束（照 Playwright 的 `closedPromise`）。
+    /// 結束（照 Playwright 的 `closedPromise`；照 `crBrowser._closePage` 一律送出，
+    /// crash 的 target 也會以 `detachedFromTarget` 結束）。
     pub(crate) async fn close(self: &Arc<Self>) -> Result<(), DriverError> {
         if self.is_closed() {
             return Ok(());
         }
-        // 已 crash 的 target 不再送 closeTarget（照 Playwright：吞掉錯誤後等 close）。
-        if !self.is_crashed() {
-            let _ = self
-                .browser
-                .launched
-                .send_command(
-                    None,
-                    "Target.closeTarget",
-                    json!({"targetId": self.target_id}),
-                )
-                .await;
-        }
+        let _ = self
+            .browser
+            .launched
+            .send_command(
+                None,
+                "Target.closeTarget",
+                json!({"targetId": self.target_id}),
+            )
+            .await;
         // 等結束通知（detachedFromTarget → did_close_target）。瀏覽器已結束時
         // 監看任務會標記關閉，這裡不會卡住。
         let mut snapshot_rx = self.snapshot.subscribe();
@@ -1483,8 +1766,15 @@ impl PageShared {
 
     /// `page.screenshot({type: 'png', fullPage: false})`：viewport 範圍的 PNG
     /// （照 crPage 的 takeScreenshot：以 visualViewport 組 clip，
-    /// `captureBeyondViewport: false`）。
+    /// `captureBeyondViewport: false`）。X7：訊息前綴 `page.screenshot`。
     pub(crate) async fn screenshot(&self) -> Result<Vec<u8>, DriverError> {
+        self.screenshot_body()
+            .await
+            .map_err(|error| error.with_api("page.screenshot"))
+    }
+
+    /// [`PageShared::screenshot`] 的本體（前綴由包裝補上）。
+    async fn screenshot_body(&self) -> Result<Vec<u8>, DriverError> {
         let metrics = self.send("Page.getLayoutMetrics", json!({})).await?;
         let visual = metrics
             .get("visualViewport")
@@ -1520,6 +1810,16 @@ impl PageShared {
         base64::engine::general_purpose::STANDARD
             .decode(data)
             .map_err(|error| DriverError::new("Error", format!("Invalid screenshot data: {error}")))
+    }
+}
+
+/// 中止旗標的等待：設真即返回（10 ms 輪詢；沒有旗標時永不返回）。
+async fn abort_wait(flag: &Arc<AtomicBool>) {
+    loop {
+        if flag.load(Ordering::SeqCst) {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
     }
 }
 
@@ -1801,7 +2101,7 @@ pub(crate) fn join_sanitized_url(endpoint: &(String, String)) -> String {
 }
 
 /// `Runtime.exceptionDetails` 的訊息（照 `crProtocolHelper.ts` 的 `getExceptionMessage`）。
-fn get_exception_message(details: &Value) -> String {
+pub(crate) fn get_exception_message(details: &Value) -> String {
     let exception = details.get("exception");
     if let Some(description) = exception
         .and_then(|exception| exception.get("description"))

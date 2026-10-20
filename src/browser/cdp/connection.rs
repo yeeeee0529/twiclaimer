@@ -11,7 +11,7 @@
 //! - `Router::dropped_diagnostics`（S1.6 的診斷計數）與 `Router::pending_count`（測試用）。
 #![allow(dead_code)]
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -40,6 +40,10 @@ pub(crate) enum CdpError {
     ///
     /// 對應 Playwright 的 `Target page, context or browser has been closed`。
     TargetClosed,
+    /// session 的 target 已 crash（照 `crConnection.ts` 的 `CRSession`：
+    /// `_markAsCrashed()` 拒絕 pending 與後續所有指令；dispatcher 把 crashed
+    /// 錯誤改寫成 `Target crashed <browser logs>`，沒有 logs 時保留尾端空白）。
+    Crashed,
 }
 
 impl CdpError {
@@ -47,6 +51,8 @@ impl CdpError {
         match self {
             CdpError::Protocol { message, .. } => message.clone(),
             CdpError::TargetClosed => "Target page, context or browser has been closed".to_string(),
+            // 結尾有一個空白（照 pw-errors 的 after-crash-evaluate 案例）。
+            CdpError::Crashed => "Target crashed ".to_string(),
         }
     }
 }
@@ -162,6 +168,22 @@ impl Router {
         // 來不及交給上層的 attach 接收端一併移除（上層會收到 Detached 通知）。
         self.session_receivers.remove(session_id);
         self.fail_pending(|pending| pending.session.as_deref() == Some(session_id))
+    }
+
+    /// session 的 target 已 crash：該 session 未完成的指令全部失敗
+    /// （照 `crConnection.ts` 的 `_markAsCrashed` → `_rejectPendingCallbacks`）。
+    pub(crate) fn fail_session_pending_crashed(&mut self, session_id: &str) {
+        let ids: Vec<u64> = self
+            .pending
+            .iter()
+            .filter(|(_, pending)| pending.session.as_deref() == Some(session_id))
+            .map(|(id, _)| *id)
+            .collect();
+        for id in ids {
+            if let Some(pending) = self.pending.remove(&id) {
+                let _ = pending.reply.send(Err(CdpError::Crashed));
+            }
+        }
     }
 
     /// 登記一個等待中的指令。
@@ -369,6 +391,12 @@ pub(crate) struct Connection {
     shutdown: oneshot::Sender<()>,
     /// CDP trace 寫入器（§7.3.7）：SEND／RECV 每則訊息各一行；未設定時 no-op。
     trace: SharedTrace,
+    /// 已 crash 的 session（照 `CRSession._markAsCrashed`：之後送到這些 session
+    /// 的指令立即回 [`CdpError::Crashed`]，不等一個永遠不會來的回應）。
+    ///
+    /// 同步鎖：事件泵在處理 `Inspector.targetCrashed` 時（不可 await 的同步
+    /// 路徑）先登記，pending 的拒絕再交給背景任務補上。
+    crashed_sessions: std::sync::Mutex<HashSet<String>>,
     read_task: JoinHandle<()>,
     write_task: JoinHandle<()>,
 }
@@ -412,6 +440,7 @@ impl Connection {
                 write_tx,
                 shutdown,
                 trace,
+                crashed_sessions: std::sync::Mutex::new(HashSet::new()),
                 read_task,
                 write_task,
             },
@@ -419,16 +448,49 @@ impl Connection {
         )
     }
 
+    /// 標記 session 已 crash（照 `crConnection.ts` 的 `CRSession._markAsCrashed`）。
+    ///
+    /// 同步函式（事件泵的事件處理是同步路徑）：之後送到這個 session 的指令
+    /// 立即回 [`CdpError::Crashed`]；懸而未決的指令由
+    /// [`Connection::fail_crashed_session_pending`] 在背景拒絕。
+    pub(crate) fn mark_session_crashed(&self, session_id: &str) {
+        self.crashed_sessions
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .insert(session_id.to_string());
+    }
+
+    /// 拒絕 crash session 的 pending 指令（錯誤訊息 `Target crashed `）。
+    pub(crate) async fn fail_crashed_session_pending(&self, session_id: &str) {
+        self.router
+            .lock()
+            .await
+            .fail_session_pending_crashed(session_id);
+    }
+
     /// 送出一則 CDP 指令，回傳回應的接收端（§7.3.2：id 遞增、回應依 id 交給等待者）。
     ///
     /// `session` 為 `Some` 時訊息帶 `sessionId`（子 session 指令）；`None` 是
-    /// 瀏覽器 session 的指令。連線已關閉時，回傳的 receiver 直接收到 `TargetClosed`。
+    /// 瀏覽器 session 的指令。連線已關閉時，回傳的 receiver 直接收到 `TargetClosed`；
+    /// session 已 crash 時直接收到 `Crashed`（照 `CRSession.send` 的檢查）。
     pub(crate) async fn send_command(
         &self,
         session: Option<&str>,
         method: &str,
         params: serde_json::Value,
     ) -> oneshot::Receiver<Result<serde_json::Value, CdpError>> {
+        // 已 crash 的 session：指令不會有回應，立即失敗（照 CRSession.send）。
+        if let Some(session) = session
+            && self
+                .crashed_sessions
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .contains(session)
+        {
+            let (reply_tx, reply_rx) = oneshot::channel();
+            let _ = reply_tx.send(Err(CdpError::Crashed));
+            return reply_rx;
+        }
         let (reply_tx, reply_rx) = oneshot::channel();
         {
             let mut router = self.router.lock().await;

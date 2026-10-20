@@ -1,0 +1,24 @@
+<!doctype html>
+<!-- S1.5 的 stable 等待 mock 頁：按鈕做有限時間的位移动畫（動畫結束後穩定）。
+     ?duration=<ms> 控制動畫長度；0 = 停不下來（infinite）。 -->
+<html>
+<head><meta charset="utf-8"><title>animated</title><style>
+  @keyframes slide {
+    from { transform: translateX(0); }
+    to   { transform: translateX(200px); }
+  }
+</style></head>
+<body>
+  <button id="animated" style="animation-name:none">moving</button>
+  <script>
+    const duration = Number(new URLSearchParams(location.search).get('duration') || 300);
+    const button = document.getElementById('animated');
+    if (duration === 0) {
+      button.style.animation = 'slide 0.3s ease infinite alternate';
+    } else {
+      button.style.animation = `slide ${duration}ms ease`;
+    }
+    button.addEventListener('click', () => { button.textContent = 'clicked'; });
+  </script>
+</body>
+</html>

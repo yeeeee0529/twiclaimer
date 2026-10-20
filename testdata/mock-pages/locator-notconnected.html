@@ -1,0 +1,28 @@
+<!doctype html>
+<!-- S1.5 的 notconnected 重試 mock 頁：按鈕在 mouseenter 時把自己移除（攔截器
+     已安裝、事件落下前），可選在 ?recreate=<ms> 後重新掛回同名按鈕。 -->
+<html>
+<head><meta charset="utf-8"><title>notconnected</title></head>
+<body>
+  <div id="host"><button id="btn">click me</button></div>
+  <script>
+    const recreateDelay = Number(new URLSearchParams(location.search).get('recreate') || 0);
+    const btn = document.getElementById('btn');
+    let removed = false;
+    btn.addEventListener('mouseenter', () => {
+      if (removed) return;
+      removed = true;
+      btn.remove();
+      if (recreateDelay > 0) {
+        setTimeout(() => {
+          const fresh = btn.cloneNode(true);
+          fresh.id = 'btn';
+          fresh.addEventListener('click', () => { fresh.textContent = 'clicked'; });
+          fresh.addEventListener('mouseenter', () => {});
+          document.getElementById('host').appendChild(fresh);
+        }, recreateDelay);
+      }
+    });
+  </script>
+</body>
+</html>
