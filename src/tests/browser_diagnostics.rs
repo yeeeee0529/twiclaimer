@@ -13,10 +13,16 @@ use std::time::{Duration, Instant};
 use crate::browser::cdp::context::BrowserAdapter;
 use crate::browser::cdp::launcher::BrowserLauncher;
 use crate::browser::cdp::page::WaitUntil;
+use crate::browser::manager::{BrowserManager, DefaultBrowserManager};
+use crate::browser::types::{
+    BrowserManagerBrowserConfig, BrowserManagerConfig, BrowserManagerDependencies,
+    BrowserManagerLogger, BrowserManagerRecoveryConfig,
+};
 use crate::browser::page_adapter::{
     BrowserConsoleDiagnostic, BrowserHttpResponseDiagnostic, BrowserRequestFailureDiagnostic,
     DiagnosticEventSource, PlaywrightBrowserPageAdapter,
 };
+use crate::logging::redact::SanitizedValue;
 
 /// 診斷事件到齊的輪詢上限（本機伺服器，事件應即時到達）。
 const POLL_DEADLINE: Duration = Duration::from_secs(5);
@@ -246,4 +252,183 @@ async fn run_diagnostics_flow(
         .map_err(|error| error.to_string())?;
     context.close().await.map_err(|error| error.to_string())?;
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// S3.3：e2e `browser-diagnostics` 的第 2 個測試（BrowserManager 的診斷接線）
+// ---------------------------------------------------------------------------
+
+/// e2e 的收集 logger（對應舊 e2e 內建的 `BrowserManagerLogger` 物件）：記錄
+/// （層級、事件、欄位）；欄位經 [`SanitizedValue::to_json_string`] 轉成
+/// `serde_json::Value` 儲存（`SanitizedValue` 內含 `Rc` 不可 Send）。
+struct RecordingLogger {
+    entries: std::sync::Mutex<Vec<(String, String, serde_json::Value)>>,
+}
+
+impl RecordingLogger {
+    fn new() -> Arc<Self> {
+        Arc::new(Self {
+            entries: std::sync::Mutex::new(Vec::new()),
+        })
+    }
+
+    fn record(&self, level: &str, event: &str, fields: Option<&SanitizedValue>) {
+        let json = match fields {
+            Some(fields) => serde_json::from_str(&fields.to_json_string())
+                .unwrap_or(serde_json::Value::Null),
+            None => serde_json::Value::Object(serde_json::Map::new()),
+        };
+        self.entries
+            .lock()
+            .unwrap()
+            .push((level.to_string(), event.to_string(), json));
+    }
+
+    /// 特定事件的記錄（對應 `logs.filter(item => item.event === …)`）。
+    fn by_event(&self, event: &str) -> Vec<serde_json::Value> {
+        self.entries
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(_, entry_event, _)| entry_event == event)
+            .map(|(_, _, fields)| fields.clone())
+            .collect()
+    }
+
+    /// 序列化後的整份記錄（對應 `JSON.stringify(logs)` 的消毒檢查）。
+    fn serialized(&self) -> String {
+        format!("{:?}", self.entries.lock().unwrap())
+    }
+}
+
+impl BrowserManagerLogger for RecordingLogger {
+    fn debug(&self, event: &str, fields: Option<&SanitizedValue>) {
+        self.record("debug", event, fields);
+    }
+
+    fn info(&self, event: &str, fields: Option<&SanitizedValue>) {
+        self.record("info", event, fields);
+    }
+
+    fn warn(&self, event: &str, fields: Option<&SanitizedValue>) {
+        self.record("warn", event, fields);
+    }
+
+    fn error(&self, event: &str, fields: Option<&SanitizedValue>) {
+        self.record("error", event, fields);
+    }
+}
+
+// 原測試：BrowserManager 以 channel 與 generation 記錄消毒後的診斷
+#[tokio::test]
+#[ignore = "需要 CHROME_PATH"]
+async fn browser_manager_logs_sanitized_diagnostics_with_channel_and_generation() {
+    let (server_port, server_stop) = spawn_local_diagnostic_server();
+
+    // 舊 e2e 以 fake launcher 包住真實頁面；Rust 版用正式啟動器接真實
+    // headless shell（manager 途徑 = types.rs 的 trait 實作）。
+    let logger = RecordingLogger::new();
+    let config = BrowserManagerConfig {
+        headless: true,
+        // 不帶 storageState（正式碼路徑為空字串時不讀檔）。
+        storage_state_path: String::new(),
+        browser: BrowserManagerBrowserConfig {
+            restart_on_crash: true,
+            viewport_width: 1280.0,
+            viewport_height: 720.0,
+            block_images: false,
+            block_fonts: false,
+            block_known_tracking: false,
+            disable_chat: false,
+            recovery: BrowserManagerRecoveryConfig {
+                page_crash_backoff_seconds: vec![30.0, 60.0, 120.0],
+                channel_crash_window_seconds: 600.0,
+                channel_quarantine_threshold: 4.0,
+                channel_quarantine_seconds: 900.0,
+                stable_reset_seconds: 1_800.0,
+                multi_channel_crash_window_seconds: 15.0,
+                multi_channel_crash_threshold: 2.0,
+                browser_failure_window_seconds: 600.0,
+                browser_failure_container_threshold: 3.0,
+            },
+        },
+    };
+    let manager = DefaultBrowserManager::new(
+        config,
+        BrowserManagerDependencies {
+            logger: Some(logger.clone() as Arc<dyn BrowserManagerLogger>),
+            ..BrowserManagerDependencies::default()
+        },
+    );
+
+    manager.start().await.unwrap();
+    let page = manager.create_page("diag_channel").await.unwrap();
+
+    // 導覽到 mock 頁：console.error、注入被封鎖的 script、fetch 500。
+    let shared = page
+        .as_page_shared()
+        .unwrap_or_else(|| panic!("正式碼的頁面把手應提供 PageShared"));
+    shared
+        .goto(
+            &format!("http://127.0.0.1:{server_port}/diag.html"),
+            WaitUntil::DomContentLoaded,
+        )
+        .await
+        .unwrap();
+
+    // 等三種診斷記錄到齊（照舊 e2e 的 `expect.poll`）。
+    assert!(
+        eventually(POLL_DEADLINE, || !logger.by_event("browser_request_failed").is_empty()).await,
+        "應記錄 browser_request_failed"
+    );
+    assert!(
+        eventually(POLL_DEADLINE, || !logger.by_event("browser_http_response").is_empty()).await,
+        "應記錄 browser_http_response"
+    );
+    assert!(
+        eventually(POLL_DEADLINE, || !logger.by_event("browser_console_message").is_empty()).await,
+        "應記錄 browser_console_message"
+    );
+
+    // requestfailed：channel／generation／消毒後端點（照舊 e2e 的
+    // `toMatchObject`；本機伺服器的 host 為 127.0.0.1）。
+    let request_failed = logger
+        .by_event("browser_request_failed")
+        .into_iter()
+        .find(|fields| fields.get("path") == Some(&serde_json::json!("/blocked.js")))
+        .unwrap_or_else(|| panic!("找不到 blocked.js 的記錄"));
+    assert_eq!(request_failed.get("channel"), Some(&serde_json::json!("diag_channel")));
+    assert_eq!(request_failed.get("browserGeneration"), Some(&serde_json::json!(1)));
+    assert_eq!(request_failed.get("pageGeneration"), Some(&serde_json::json!(1)));
+    assert_eq!(request_failed.get("host"), Some(&serde_json::json!("127.0.0.1")));
+    assert_eq!(request_failed.get("method"), Some(&serde_json::json!("GET")));
+    assert_eq!(request_failed.get("resourceType"), Some(&serde_json::json!("script")));
+
+    // response：非成功回應帶 status。
+    let http_response = logger
+        .by_event("browser_http_response")
+        .into_iter()
+        .find(|fields| fields.get("path") == Some(&serde_json::json!("/failing-api")))
+        .unwrap_or_else(|| panic!("找不到 failing-api 的記錄"));
+    assert_eq!(http_response.get("channel"), Some(&serde_json::json!("diag_channel")));
+    assert_eq!(http_response.get("host"), Some(&serde_json::json!("127.0.0.1")));
+    assert_eq!(http_response.get("httpStatus"), Some(&serde_json::json!(500)));
+
+    // console：error 類型。
+    let console_message = logger
+        .by_event("browser_console_message")
+        .into_iter()
+        .find(|fields| fields.get("consoleType") == Some(&serde_json::json!("error")))
+        .unwrap_or_else(|| panic!("找不到 error 的 console 記錄"));
+    assert_eq!(console_message.get("channel"), Some(&serde_json::json!("diag_channel")));
+
+    // 消毒：全部記錄序列化後不得含 query 值與 token（照舊 e2e 的 `not.toContain`）。
+    let serialized = logger.serialized();
+    assert!(!serialized.contains("token=secret"), "{serialized}");
+    assert!(!serialized.contains("client_id=hidden"), "{serialized}");
+    assert!(!serialized.contains("abc123"), "{serialized}");
+
+    // 收尾：manager 的 stop 會關閉 page、context 與瀏覽器。
+    server_stop.store(true, Ordering::SeqCst);
+    manager.stop().await.unwrap();
 }
