@@ -3,3 +3,4 @@
 //! 這裡放會 spawn 真實程序（假瀏覽器腳本或 headless shell）的測試；
 //! 純函式與本機可驗證的行為在各模組的 `tests.rs`。
 mod browser_launch;
+mod selectors_parse;

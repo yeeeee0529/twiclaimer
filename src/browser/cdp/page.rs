@@ -328,7 +328,7 @@ impl PageShared {
     }
 
     /// 送出一則頁面 session 的指令（等回應）。
-    async fn send(&self, method: &str, params: Value) -> Result<Value, DriverError> {
+    pub(crate) async fn send(&self, method: &str, params: Value) -> Result<Value, DriverError> {
         self.browser
             .launched
             .send_command(Some(&self.session_id), method, params)
@@ -340,7 +340,7 @@ impl PageShared {
     ///
     /// 指令在 Router 鎖內排隊，順序與事件泵的處理順序一致；不等回應避免堵住
     /// 事件泵（瀏覽器要收到 continue 才會繼續送事件）。
-    fn send_may_fail(&self, method: &str, params: Value) {
+    pub(crate) fn send_may_fail(&self, method: &str, params: Value) {
         let launched = Arc::clone(&self.browser.launched);
         let session = self.session_id.clone();
         let method = method.to_string();
@@ -1379,7 +1379,7 @@ impl PageShared {
     }
 
     /// 等主框架 main world 的 execution context（導覽後重建；30 秒防線）。
-    async fn wait_main_world_context(&self) -> Result<i64, DriverError> {
+    pub(crate) async fn wait_main_world_context(&self) -> Result<i64, DriverError> {
         let mut snapshot_rx = self.snapshot.subscribe();
         let deadline = Instant::now() + Duration::from_secs(30);
         loop {
@@ -1801,7 +1801,7 @@ pub(crate) fn join_sanitized_url(endpoint: &(String, String)) -> String {
 }
 
 /// `Runtime.exceptionDetails` 的訊息（照 `crProtocolHelper.ts` 的 `getExceptionMessage`）。
-fn get_exception_message(details: &Value) -> String {
+pub(crate) fn get_exception_message(details: &Value) -> String {
     let exception = details.get("exception");
     if let Some(description) = exception
         .and_then(|exception| exception.get("description"))
