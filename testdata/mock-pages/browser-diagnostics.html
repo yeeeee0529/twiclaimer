@@ -1,0 +1,19 @@
+<!doctype html>
+<!-- S1.6 e2e（browser-diagnostics 第 1 個）：頁面載入時觸發失敗請求
+     （/blocked.js）、非成功回應（/failing-api）與 console 輸出；query 帶敏感
+     值，用來驗證診斷消毒。相對路徑由本機伺服器的 port 組成。 -->
+<html>
+  <head>
+    <script>
+      console.error('Twitch bootstrap error token=abc123');
+    </script>
+  </head>
+  <body>
+    <script>
+      const blockedScript = document.createElement('script');
+      blockedScript.src = '/blocked.js?token=secret';
+      document.head.appendChild(blockedScript);
+      void fetch('/failing-api?client_id=hidden').catch(() => undefined);
+    </script>
+  </body>
+</html>
