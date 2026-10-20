@@ -4,3 +4,4 @@
 //! 純函式與本機可驗證的行為在各模組的 `tests.rs`。
 mod browser_diagnostics;
 mod browser_launch;
+mod multi_page;

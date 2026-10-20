@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Multi popup opener</title>
+  </head>
+  <body>
+    <main>
+      <section data-multi-popup="opener">Popup opener</section>
+    </main>
+    <!-- 照 tools/ref/multi-server.mjs 的 multi 頁：載入後開一個 popup；
+         參數含 --disable-popup-blocking，不需 user gesture。 -->
+    <script>
+      setTimeout(() => window.open("about:blank"), 150);
+    </script>
+  </body>
+</html>
