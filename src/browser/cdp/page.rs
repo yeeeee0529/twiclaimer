@@ -366,7 +366,15 @@ impl PageShared {
     }
 
     /// 送出一則頁面 session 的指令（等回應）。
+    ///
+    /// 頁面已關閉時不送出、立即回已關閉錯誤（照 Playwright 的
+    /// LongStandingScope：close 之後的指令一律 `Target page, context or
+    /// browser has been closed`——不然 Chromium 會回「Session with given id
+    /// not found」，訊息不同）。
     pub(crate) async fn send(&self, method: &str, params: Value) -> Result<Value, DriverError> {
+        if self.is_closed() {
+            return Err(DriverError::target_closed());
+        }
         self.browser
             .launched
             .send_command(Some(&self.session_id), method, params)

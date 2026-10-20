@@ -97,8 +97,7 @@ async fn click_times_out_on_hidden_disabled_and_covered() {
         let error = page.locator(selector).click(Some(300)).await.unwrap_err();
         assert_eq!(error.name, "TimeoutError", "{selector}");
         assert_eq!(
-            error.message,
-            "locator.click: Timeout 300ms exceeded.",
+            error.message, "locator.click: Timeout 300ms exceeded.",
             "{selector}"
         );
     }
