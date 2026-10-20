@@ -28,8 +28,14 @@ fn snapshot_with(
         // mib_to_bytes 回 u128（照 config::thresholds 的 bigint 語意）；欄位以
         // u64 呈現，測試值皆在 u64 範圍內。
         memory_current_bytes: mib_to_bytes(memory_mib as f64) as u64,
+        // memory.max／peak／pids／cpu 是 S3.2 reader 補齊的欄位；政策測試不使用。
+        memory_max_bytes: None,
+        memory_peak_bytes: None,
         swap_current_bytes: swap_mib.map(|swap_mib| mib_to_bytes(swap_mib as f64) as u64),
+        pids_current: None,
+        pids_max: None,
         events,
+        cpu: None,
     }
 }
 

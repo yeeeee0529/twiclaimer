@@ -11,9 +11,9 @@
 //!   秒數欄位是 f64，使用處以 `秒數 * 1_000.0` 轉成 u64 毫秒：時間戳是整數
 //!   毫秒，`整數差 <= trunc(seconds * 1000)` 與舊版浮點比較等價（`as u64`
 //!   對負值／NaN 飽和為 0；設定驗證保證為正的有限數）。
-//! - `CgroupSnapshot`／`CgroupMemoryEvents` 屬於舊版 `app/CgroupV2Reader.ts`，
-//!   reader 本體在 S3.2 移植；此處保留政策可見的欄位子集，等 S3.2 移植
-//!   reader 時移過去。
+//! - `CgroupSnapshot`／`CgroupMemoryEvents` 自 S3.2 起改由 [`super::cgroup`]
+//!   的正式移植提供（DEC-013 的暫定子集定義已移除，欄位照舊版
+//!   `app/CgroupV2Reader.ts` 補齊）。
 //! - 時鐘以 [`GuardClock`] 注入（對應舊版 options 的 `now`，預設
 //!   `performance.now()`）；舊測試注入固定／可寫入時鐘，不等真實時間。
 #![allow(dead_code)]
@@ -21,28 +21,9 @@
 use std::sync::OnceLock;
 use std::time::Instant;
 
+use super::cgroup::{CgroupMemoryEvents, CgroupSnapshot};
 use crate::config::model::{ResourceGuardConfig, ResourceGuardEffectiveThresholds};
 use crate::config::thresholds::{bytes_to_mib_number, mib_to_bytes};
-
-/// 舊版 `CgroupMemoryEvents`（`app/CgroupV2Reader.ts`）：memory.events 計數器
-/// （JS bigint 以 u64 呈現，cgroup 計數不會超出）。
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(crate) struct CgroupMemoryEvents {
-    pub high: u64,
-    pub max: u64,
-    pub oom: u64,
-    pub oom_kill: u64,
-}
-
-/// 舊版 `CgroupSnapshot`（`app/CgroupV2Reader.ts`）中政策消費的欄位子集；
-/// memory.max／peak／pids／cpu 由 reader 端移植時補齊。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct CgroupSnapshot {
-    pub sampled_at_monotonic_ms: u64,
-    pub memory_current_bytes: u64,
-    pub swap_current_bytes: Option<u64>,
-    pub events: CgroupMemoryEvents,
-}
 
 /// 舊版 `ResourceGuardPolicyConfig`（`config/resourceGuardThresholds.ts` 的
 /// `Pick<…> & { effective }` 別名）：欄位照來源 `ResourceGuardConfig` 的型別
