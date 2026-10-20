@@ -1,6 +1,6 @@
 # 進度
 
-- 目前步驟：S1.5 Locator（`wt/s15-locator`）＋S1.6 診斷 adapter（`wt/s16-adapter`）兩個子代理並行；S1.4 與 S2 階段（S2.1–S2.6）全部完成
+- 目前步驟：S1.5 Locator（`wt/s15-locator`，進行中）＋S1.8 多頁面與 crash（即將派出）；S1.4、S1.6 與 S2 階段（S2.1–S2.6）全部完成
 - DEC-013 統一已完成（`c187b42`）：`sessions/recovery.rs` 與 `app/resource_guard.rs` 改用 `config::model`／`config::thresholds`（thresholds 的 bytes 以 u128 對應 JS bigint，使用處經 u128::from 無損轉換）；`CgroupSnapshot`／`CgroupMemoryEvents` 仍在 `app/resource_guard.rs`，等 S3.2 reader 落地時移過去
 - 觀察到的既有不穩定：`tests::browser_launch::cancelling_close_kills_a_browser_that_ignores_browser_close`（S1.3 假瀏覽器測試，非 ignore）在全套平行跑時失敗過一次（process group 收屍時序），單跑與後續全跑皆通過；持續觀察，若再現就檢查收屍等待的確定性
 - 卡住的項目：無
@@ -26,7 +26,7 @@
 | S1.3 | 完成 | 2026-10-19 | 0.5 天 | transport（6）＋ connection 路由（13）＋ Connection 讀寫接線（10）＋ launcher 程序面機制（16）＝45 個測試；本段完成 launch 握手（`getVersion` → `setAutoAttach`，180 秒整體逾時、Playwright 同款訊息）、`LaunchedBrowser` 的 close／drop／取消／EOF 防線（一律整群 `SIGKILL`、背景收屍）與 disconnected 觸發一次、macOS 的 `dup2` 退路（DEC-007）。83 個單元＋3 個 e2e（真實 headless shell：`get_version()` 為 `151.0.7922.34`、錄製參數逐行比對、close／drop 後無殘留程序與暫存目錄）全過，clippy 乾淨；G8 的 Linux 部分留 Docker test stage | a9f94fc |
 | S1.4 | 完成 | 2026-10-19 | 0.5 天 | context（cookies 轉換、localStorage 暫時頁、setDownloadBehavior）＋page 初始化序列＋嵌套 auto-attach（page／iframe OOPIF／worker／popup）＋資源阻擋／聊天室封鎖（init script 雜湊逐位元組）＋`goto`／`screenshot`／`close`＋**probe 子命令**（`#[path]` 掛載，DEC-014）。**G2 通過：9 組錄製 CDP 順序全部相同；diag-diff 診斷也 9 組全部相同（G3 比對工具零差異）**，並以修好的 repo 腳本（bash 3.2 相容）重跑確認。債：page.rs／context.rs／probe.rs 尚無單元測試（S1.6 補 listener 測試時一併補）；G4 的 trace 匯出仍屬【人工】 | 
 | S1.5 | 未開始 | | | | |
-| S1.6 | 未開始 | | | | |
+| S1.6 | 完成 | 2026-10-19 | 0.2 天 | `PlaywrightBrowserPageAdapter` 移植（`src/browser/page_adapter.rs`）：三個診斷 listener、`sanitizeBrowserUrl`／`joinSanitizedUrl`／redact／UTF-16 截斷與省略條件照舊版；**9 個舊測試全移植（port-coverage strict 9/9）**＋1 補測；e2e `browser_diagnostics`（本機 TCP 伺服器取代 `page.route`）通過且連跑 4 次穩定。extraction 照 DEC-006 重用 `diagnostics.rs` 純函式；吞錯以 `catch_unwind` 表達。債：page.rs 事件泵的內聯 GraphQL 抽出改接純函式，留到 S1.5 合併後由主會話處理；e2e 第 2 個在 S3.3 | 
 | S1.7 | 未開始 | | | | |
 | S1.8 | 未開始 | | | | |
 | S1 關卡 | 未開始 | | | | |
