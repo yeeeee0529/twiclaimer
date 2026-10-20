@@ -14,13 +14,13 @@ use crate::browser::cdp::context::BrowserAdapter;
 use crate::browser::cdp::launcher::BrowserLauncher;
 use crate::browser::cdp::page::WaitUntil;
 use crate::browser::manager::{BrowserManager, DefaultBrowserManager};
-use crate::browser::types::{
-    BrowserManagerBrowserConfig, BrowserManagerConfig, BrowserManagerDependencies,
-    BrowserManagerLogger, BrowserManagerRecoveryConfig,
-};
 use crate::browser::page_adapter::{
     BrowserConsoleDiagnostic, BrowserHttpResponseDiagnostic, BrowserRequestFailureDiagnostic,
     DiagnosticEventSource, PlaywrightBrowserPageAdapter,
+};
+use crate::browser::types::{
+    BrowserManagerBrowserConfig, BrowserManagerConfig, BrowserManagerDependencies,
+    BrowserManagerLogger, BrowserManagerRecoveryConfig,
 };
 use crate::logging::redact::SanitizedValue;
 
@@ -274,8 +274,9 @@ impl RecordingLogger {
 
     fn record(&self, level: &str, event: &str, fields: Option<&SanitizedValue>) {
         let json = match fields {
-            Some(fields) => serde_json::from_str(&fields.to_json_string())
-                .unwrap_or(serde_json::Value::Null),
+            Some(fields) => {
+                serde_json::from_str(&fields.to_json_string()).unwrap_or(serde_json::Value::Null)
+            }
             None => serde_json::Value::Object(serde_json::Map::new()),
         };
         self.entries
@@ -378,15 +379,24 @@ async fn browser_manager_logs_sanitized_diagnostics_with_channel_and_generation(
 
     // 等三種診斷記錄到齊（照舊 e2e 的 `expect.poll`）。
     assert!(
-        eventually(POLL_DEADLINE, || !logger.by_event("browser_request_failed").is_empty()).await,
+        eventually(POLL_DEADLINE, || !logger
+            .by_event("browser_request_failed")
+            .is_empty())
+        .await,
         "應記錄 browser_request_failed"
     );
     assert!(
-        eventually(POLL_DEADLINE, || !logger.by_event("browser_http_response").is_empty()).await,
+        eventually(POLL_DEADLINE, || !logger
+            .by_event("browser_http_response")
+            .is_empty())
+        .await,
         "應記錄 browser_http_response"
     );
     assert!(
-        eventually(POLL_DEADLINE, || !logger.by_event("browser_console_message").is_empty()).await,
+        eventually(POLL_DEADLINE, || !logger
+            .by_event("browser_console_message")
+            .is_empty())
+        .await,
         "應記錄 browser_console_message"
     );
 
@@ -397,12 +407,30 @@ async fn browser_manager_logs_sanitized_diagnostics_with_channel_and_generation(
         .into_iter()
         .find(|fields| fields.get("path") == Some(&serde_json::json!("/blocked.js")))
         .unwrap_or_else(|| panic!("找不到 blocked.js 的記錄"));
-    assert_eq!(request_failed.get("channel"), Some(&serde_json::json!("diag_channel")));
-    assert_eq!(request_failed.get("browserGeneration"), Some(&serde_json::json!(1)));
-    assert_eq!(request_failed.get("pageGeneration"), Some(&serde_json::json!(1)));
-    assert_eq!(request_failed.get("host"), Some(&serde_json::json!("127.0.0.1")));
-    assert_eq!(request_failed.get("method"), Some(&serde_json::json!("GET")));
-    assert_eq!(request_failed.get("resourceType"), Some(&serde_json::json!("script")));
+    assert_eq!(
+        request_failed.get("channel"),
+        Some(&serde_json::json!("diag_channel"))
+    );
+    assert_eq!(
+        request_failed.get("browserGeneration"),
+        Some(&serde_json::json!(1))
+    );
+    assert_eq!(
+        request_failed.get("pageGeneration"),
+        Some(&serde_json::json!(1))
+    );
+    assert_eq!(
+        request_failed.get("host"),
+        Some(&serde_json::json!("127.0.0.1"))
+    );
+    assert_eq!(
+        request_failed.get("method"),
+        Some(&serde_json::json!("GET"))
+    );
+    assert_eq!(
+        request_failed.get("resourceType"),
+        Some(&serde_json::json!("script"))
+    );
 
     // response：非成功回應帶 status。
     let http_response = logger
@@ -410,9 +438,18 @@ async fn browser_manager_logs_sanitized_diagnostics_with_channel_and_generation(
         .into_iter()
         .find(|fields| fields.get("path") == Some(&serde_json::json!("/failing-api")))
         .unwrap_or_else(|| panic!("找不到 failing-api 的記錄"));
-    assert_eq!(http_response.get("channel"), Some(&serde_json::json!("diag_channel")));
-    assert_eq!(http_response.get("host"), Some(&serde_json::json!("127.0.0.1")));
-    assert_eq!(http_response.get("httpStatus"), Some(&serde_json::json!(500)));
+    assert_eq!(
+        http_response.get("channel"),
+        Some(&serde_json::json!("diag_channel"))
+    );
+    assert_eq!(
+        http_response.get("host"),
+        Some(&serde_json::json!("127.0.0.1"))
+    );
+    assert_eq!(
+        http_response.get("httpStatus"),
+        Some(&serde_json::json!(500))
+    );
 
     // console：error 類型。
     let console_message = logger
@@ -420,7 +457,10 @@ async fn browser_manager_logs_sanitized_diagnostics_with_channel_and_generation(
         .into_iter()
         .find(|fields| fields.get("consoleType") == Some(&serde_json::json!("error")))
         .unwrap_or_else(|| panic!("找不到 error 的 console 記錄"));
-    assert_eq!(console_message.get("channel"), Some(&serde_json::json!("diag_channel")));
+    assert_eq!(
+        console_message.get("channel"),
+        Some(&serde_json::json!("diag_channel"))
+    );
 
     // 消毒：全部記錄序列化後不得含 query 值與 token（照舊 e2e 的 `not.toContain`）。
     let serialized = logger.serialized();

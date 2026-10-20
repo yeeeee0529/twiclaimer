@@ -253,13 +253,19 @@ impl ExclusiveQueue {
             .state
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        match state.waiters.pop_front() {
-            Some(waiter) => {
-                // 交棒：occupied 維持 true（下一筆直接開始）。
-                let _ = waiter.send(());
-            }
-            None => {
-                state.occupied = false;
+        loop {
+            match state.waiters.pop_front() {
+                Some(waiter) => {
+                    if waiter.send(()).is_ok() {
+                        // 交棒：occupied 維持 true（下一筆直接開始）。
+                        return;
+                    }
+                    // 等待者已消失（排隊的 future 被取消）：繼續找下一個。
+                }
+                None => {
+                    state.occupied = false;
+                    return;
+                }
             }
         }
     }
