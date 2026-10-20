@@ -50,6 +50,29 @@ const RESOLVE_ELEMENT_SOURCE: &str = r#"(injected, { selector, strict }) => {
   return elements[0] ?? undefined;
 }"#;
 
+/// 檢查元素狀態（click：`['visible','enabled','stable']`、hover：
+/// `['visible','stable']`；照 `_performPointerAction` 的 `injected.checkElementStates`。
+/// 回 undefined（成立）、'error:notconnected' 或 `{missingState}`）。
+pub(crate) const CHECK_ELEMENT_STATES_SOURCE: &str =
+    r#"(injected, node, states) => injected.checkElementStates(node, states)"#;
+
+/// 安裝 hit target 攔截器（照 `_performPointerAction`；回 `{stop}` 物件、
+/// 蓋住元素的描述字串或 'error:notconnected'，`returnByValue: false`）。
+pub(crate) const SETUP_HIT_TARGET_INTERCEPTOR_SOURCE: &str = r#"(injected, node, actionType, hitPoint, blockAllEvents) =>
+      injected.setupHitTargetInterceptor(node, actionType, hitPoint, blockAllEvents)"#;
+
+/// 停止攔截器（照 `_performPointerAction` 的 `h.stop()`；回 'done' 或
+/// `{hitTargetDescription}`——第一個事件沒落在目標元素上）。
+pub(crate) const STOP_HIT_TARGET_INTERCEPTOR_SOURCE: &str =
+    r#"(interceptor) => interceptor.stop()"#;
+
+/// 以 `scrollIntoView(options)` 的對齊輪替捲動（`_retryPointerAction` 第 n 次
+/// 重試用的 forceScrollOptions；元素捲不出 sticky 蓋層時換對齊再試）。
+pub(crate) const SCROLL_INTO_VIEW_SOURCE: &str = r#"(node, options) => {
+  if (node.nodeType === 1) node.scrollIntoView(options);
+  return 'done';
+}"#;
+
 /// 主框架 main world 的 injected script 把手：物件 id 與其建立的 context id。
 pub(crate) struct InjectedScript {
     /// `(context_id, object_id)`；`None` = 尚未建立或已隨 context 摧毀。
@@ -224,10 +247,11 @@ pub(crate) async fn call_function_on(
     let reply = match reply {
         Ok(reply) => reply,
         // 照 crExecutionContext 的 `rewriteError`：session 已結束（「Target page,
-        // context or browser has been closed」）照原樣上拋；其餘協定錯誤（context
-        // 已摧毀等，例如「Cannot find context with specified id」）一律視為
-        // execution context 被導覽摧毀。
+        // context or browser has been closed」）與 crash（「Target crashed 」）
+        // 照原樣上拋；其餘協定錯誤（context 已摧毀等，例如「Cannot find context
+        // with specified id」）一律視為 execution context 被導覽摧毀。
         Err(error) if error == DriverError::target_closed() => return Err(error),
+        Err(error) if error.is_crashed() => return Err(error),
         Err(_) => {
             return Err(DriverError::new(
                 "Error",
@@ -320,6 +344,147 @@ pub(crate) async fn resolve_element_object(
         return Ok(None);
     }
     Ok(Some(result))
+}
+
+/// 遠端物件的 objectId 欄位（click／hover 解析出的元素與攔截器把手用）。
+pub(crate) fn remote_object_id(remote: &Value) -> Option<&str> {
+    remote.get("objectId").and_then(Value::as_str)
+}
+
+/// 檢查元素狀態的結果（`injected.checkElementStates` 的三種回傳）。
+pub(crate) enum ElementStateCheck {
+    /// 所有狀態成立。
+    Ready,
+    /// 元素已脫離 DOM（可重試；外層會重新解析元素）。
+    NotConnected,
+    /// 缺少某個狀態（`visible`／`enabled`／`stable` 之一；可重試）。
+    Missing(String),
+}
+
+/// `injected.checkElementStates(node, states)`（click／hover 的狀態等待；
+/// stable 在頁內以連續兩次 rAF 的相同位置判定）。
+pub(crate) async fn check_element_states(
+    page: &PageShared,
+    injected: &InjectedScript,
+    element_object_id: &str,
+    states: &[&str],
+) -> Result<ElementStateCheck, DriverError> {
+    let result = call_function_on(
+        page,
+        injected,
+        CHECK_ELEMENT_STATES_SOURCE,
+        json!([
+            {"objectId": element_object_id},
+            {"value": states},
+        ]),
+        true,
+    )
+    .await?;
+    if remote_is_undefined(&result) {
+        return Ok(ElementStateCheck::Ready);
+    }
+    if let Some(description) = remote_string(&result)
+        && description == "error:notconnected"
+    {
+        return Ok(ElementStateCheck::NotConnected);
+    }
+    if let Some(state) = remote_value(&result)
+        .get("missingState")
+        .and_then(Value::as_str)
+    {
+        return Ok(ElementStateCheck::Missing(state.to_string()));
+    }
+    Ok(ElementStateCheck::Ready)
+}
+
+/// 安裝 hit target 攔截器的結果。
+pub(crate) enum HitTargetSetup {
+    /// 已安裝（`{stop}` 物件的 objectId；動作後用 `stop` 拆掉）。
+    Installed(String),
+    /// 元素途中脫離 DOM（可重試）。
+    NotConnected,
+    /// 初步檢查失敗：元素被描述的元素蓋住（可重試）。
+    HitTargetDescription(String),
+}
+
+/// `injected.setupHitTargetInterceptor(node, actionType, hitPoint, blockAllEvents)`
+/// （照 `_performPointerAction`；`returnByValue: false` 保留 `{stop}` 的 objectId）。
+pub(crate) async fn setup_hit_target_interceptor(
+    page: &PageShared,
+    injected: &InjectedScript,
+    element_object_id: &str,
+    action_type: &str,
+    hit_point: Option<(f64, f64)>,
+    block_all_events: bool,
+) -> Result<HitTargetSetup, DriverError> {
+    let hit_point_value = match hit_point {
+        Some((x, y)) => json!({"x": x, "y": y}),
+        None => Value::Null,
+    };
+    let result = call_function_on(
+        page,
+        injected,
+        SETUP_HIT_TARGET_INTERCEPTOR_SOURCE,
+        json!([
+            {"objectId": element_object_id},
+            {"value": action_type},
+            {"value": hit_point_value},
+            {"value": block_all_events},
+        ]),
+        false,
+    )
+    .await?;
+    // 有 objectId：回傳的是 `{stop}` 物件。
+    if let Some(object_id) = remote_object_id(&result) {
+        return Ok(HitTargetSetup::Installed(object_id.to_string()));
+    }
+    // 字串：'error:notconnected' 或蓋住元素的描述。
+    if let Some(description) = remote_string(&result) {
+        if description == "error:notconnected" {
+            return Ok(HitTargetSetup::NotConnected);
+        }
+        return Ok(HitTargetSetup::HitTargetDescription(
+            description.to_string(),
+        ));
+    }
+    Ok(HitTargetSetup::NotConnected)
+}
+
+/// 停止攔截器的結果。
+pub(crate) enum HitTargetStop {
+    /// 沒有事件落在錯誤的元素上。
+    Done,
+    /// 第一個事件落在描述的元素上（可重試）。
+    HitTargetDescription(String),
+}
+
+/// `interceptor.stop()`（照 `_performPointerAction` 動作之後的呼叫；錯誤由
+/// 呼叫端吞掉視同 [`HitTargetStop::Done`]）。
+pub(crate) async fn stop_hit_target_interceptor(
+    page: &PageShared,
+    interceptor_object_id: &str,
+) -> Result<HitTargetStop, DriverError> {
+    let result = call_on_object(
+        page,
+        STOP_HIT_TARGET_INTERCEPTOR_SOURCE,
+        interceptor_object_id,
+        json!([]),
+        true,
+    )
+    .await?;
+    if let Some(description) = remote_value(&result)
+        .get("hitTargetDescription")
+        .and_then(Value::as_str)
+    {
+        return Ok(HitTargetStop::HitTargetDescription(description.to_string()));
+    }
+    Ok(HitTargetStop::Done)
+}
+
+/// 釋放遠端物件（`Runtime.releaseObject`；fire-and-forget 照 `_sendMayFail`，
+/// 元素／攔截器把手用完即回收）。
+pub(crate) fn release_object(page: &PageShared, object_id: &str) {
+    page.send_may_fail("Runtime.releaseObject", json!({"objectId": object_id}));
 }
 
 /// 遠端物件是否為字串，回傳其值（`error:notconnected` 之類的哨兵判讀用）。

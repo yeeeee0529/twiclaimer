@@ -57,6 +57,18 @@ impl DriverError {
         DriverError::new("Error", "Target page, context or browser has been closed")
     }
 
+    /// crash 的錯誤（照 dispatcher 對 crashed ProtocolError 的改寫
+    /// `Target crashed <browser logs>`；沒有 browser logs 時保留尾端一個空白，
+    /// X7 的 after-crash-evaluate 案例）。
+    pub(crate) fn crashed() -> Self {
+        DriverError::new("Error", "Target crashed ")
+    }
+
+    /// 是否為 crash 錯誤（拒絕 pending 與後續指令時的訊息）。
+    pub(crate) fn is_crashed(&self) -> bool {
+        self.name == "Error" && self.message == "Target crashed "
+    }
+
     /// 逾時（X7：`Timeout <ms>ms exceeded.`；`TimeoutError` 名稱）。
     pub(crate) fn timeout(ms: u128) -> Self {
         DriverError::new("TimeoutError", format!("Timeout {ms}ms exceeded."))
@@ -89,6 +101,7 @@ impl From<CdpError> for DriverError {
         match error {
             CdpError::Protocol { message, .. } => DriverError::new("Error", message),
             CdpError::TargetClosed => DriverError::target_closed(),
+            CdpError::Crashed => DriverError::crashed(),
         }
     }
 }
@@ -642,7 +655,11 @@ impl BrowserContextAdapter {
     /// 建立頁面（§7.3.4）：`Target.createTarget {browserContextId, url: "about:blank"}`
     /// 並等 auto-attach 的初始化完成才回傳。
     pub(crate) async fn new_page(&self) -> Result<PageAdapter, DriverError> {
-        let page = self.shared.create_target_page(false).await?;
+        let page = self
+            .shared
+            .create_target_page(false)
+            .await
+            .map_err(|error| error.with_api("browserContext.newPage"))?;
         Ok(PageAdapter { shared: page })
     }
 

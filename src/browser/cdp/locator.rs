@@ -11,7 +11,7 @@
 //! `evaluate_all()` 照原始碼不開 strict。沒有元素的 `isVisible` 回 false、
 //! `count` 回 0（frames.ts 的語意）；頁面已關閉時照錯誤上拋。
 //!
-//! click／hover 的重試機制在未來的里程碑補上（`_retryPointerAction`）。
+//! click／hover 的重試機制照 `_retryPointerAction`（[`super::pointer`]）。
 #![allow(dead_code)]
 
 use std::sync::Arc;
@@ -25,7 +25,7 @@ use super::injected::{call_function_on, remote_is_undefined, remote_value};
 use super::page::PageShared;
 
 /// 一般操作的預設逾時（§7.6：30 000 ms；`{timeout}` 覆寫，0 = 無逾時）。
-const DEFAULT_TIMEOUT_MS: u64 = 30_000;
+pub(crate) const DEFAULT_TIMEOUT_MS: u64 = 30_000;
 
 /// 輪詢的原始間隔（照 frames.ts 的 `backoffScale`；實際序列前面再補 0）。
 const BACKOFF_SCALE_MS: [u64; 5] = [20, 50, 100, 100, 500];
@@ -97,8 +97,8 @@ const EVALUATE_ALL_SOURCE: &str = r#"(injected, data) => {
 
 /// Locator：頁面 + 組合後的 selector 字串（照 client `locator.ts`）。
 pub(crate) struct Locator {
-    page: Arc<PageShared>,
-    selector: String,
+    pub(crate) page: Arc<PageShared>,
+    pub(crate) selector: String,
 }
 
 impl PageShared {
@@ -365,7 +365,7 @@ impl Locator {
 
     /// 操作逾時：`None` → 預設 30 000 ms；`Some(0)` → 無逾時（照 Playwright 的
     /// `timeout: 0` 關閉逾時）。
-    fn deadline_of(timeout: Option<u64>) -> Option<tokio::time::Instant> {
+    pub(crate) fn deadline_of(timeout: Option<u64>) -> Option<tokio::time::Instant> {
         let ms = timeout.unwrap_or(DEFAULT_TIMEOUT_MS);
         if ms == 0 {
             return None;
@@ -374,7 +374,7 @@ impl Locator {
     }
 
     /// 逾時錯誤（X7：`Timeout <ms>ms exceeded.`；0 不會走到這裡）。
-    fn timeout_error(timeout: Option<u64>) -> DriverError {
+    pub(crate) fn timeout_error(timeout: Option<u64>) -> DriverError {
         DriverError::timeout(timeout.unwrap_or(DEFAULT_TIMEOUT_MS) as u128)
     }
 
