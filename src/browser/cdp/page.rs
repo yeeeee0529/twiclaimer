@@ -1521,6 +1521,88 @@ impl PageShared {
         self.goto(url, WaitUntil::Load).await
     }
 
+    /// `page.goto` 的可中止版本（§7.4 的 `signal`）：`abort` 旗標在 select 點
+    /// 輪詢（10 ms），設真時回 `AbortError`（name=`AbortError`、
+    /// `This operation was aborted`，X7 的前綴由 goto 補上）。
+    pub(crate) async fn goto_abortable(
+        &self,
+        url: &str,
+        wait_until: WaitUntil,
+        abort: Option<Arc<AtomicBool>>,
+    ) -> Result<(), DriverError> {
+        match abort {
+            Some(flag) => {
+                tokio::select! {
+                    result = self.goto(url, wait_until) => result,
+                    // 偵測中止：10 ms 輪詢（等待迴圈的輪詢點檢查）。
+                    _ = abort_wait(&flag) => Err(DriverError::new("AbortError", "This operation was aborted")),
+                }
+            }
+            None => self.goto(url, wait_until).await,
+        }
+    }
+
+    /// `page.reload({waitUntil})`（§7.4）：`Page.reload` 之後同 `goto` 等**新文件**
+    /// 的生命週期（照 `page.ts` 的 `reload`：waitForNavigation(newDocument) 與
+    /// `Page.reload` 並行——watch 訂閱先建立，指令後送，效果相同）。
+    pub(crate) async fn reload(&self, wait_until: WaitUntil) -> Result<(), DriverError> {
+        self.reload_abortable(wait_until, None).await
+    }
+
+    /// `page.reload` 的可中止版本（同 [`PageShared::goto_abortable`]）。
+    pub(crate) async fn reload_abortable(
+        &self,
+        wait_until: WaitUntil,
+        abort: Option<Arc<AtomicBool>>,
+    ) -> Result<(), DriverError> {
+        let run = async {
+            let previous_loader = self.snapshot.borrow().loader_id.clone();
+            self.send("Page.reload", json!({})).await?;
+            self.wait_new_document_lifecycle(&previous_loader, wait_until)
+                .await
+        };
+        let timeout = self.navigation_timeout();
+        // 逾時包在裡層、abort 在外層監看；兩臂各自收斂成 `Result<(), DriverError>`
+        // （abort 不可被誤判成逾時——X7 的 `AbortError` 與 `TimeoutError` 不同）。
+        match abort {
+            Some(flag) => {
+                tokio::select! {
+                    inner = tokio::time::timeout(timeout, run) => match inner {
+                        Ok(inner) => inner,
+                        Err(_) => Err(DriverError::timeout(timeout.as_millis())),
+                    },
+                    _ = abort_wait(&flag) => Err(DriverError::new(
+                        "AbortError",
+                        "This operation was aborted",
+                    )),
+                }
+            }
+            None => match tokio::time::timeout(timeout, run).await {
+                Ok(inner) => inner,
+                Err(_) => Err(DriverError::timeout(timeout.as_millis())),
+            },
+        }
+    }
+
+    /// `page.mouse.move(x, y)`（§7.4）：單一 `Input.dispatchMouseEvent
+    /// {type: 'mouseMoved'}`（照 crInput 的 move：無按鍵時 mask 0、force 0）。
+    pub(crate) async fn mouse_move(&self, x: f64, y: f64) -> Result<(), DriverError> {
+        self.send(
+            "Input.dispatchMouseEvent",
+            json!({
+                "type": "mouseMoved",
+                "button": "none",
+                "buttons": 0,
+                "x": x,
+                "y": y,
+                "modifiers": 0,
+                "force": 0,
+            }),
+        )
+        .await
+        .map(|_| ())
+    }
+
     /// `page.close()`（§7.3.4）：browser session 送 `Target.closeTarget`，等 target
     /// 結束（照 Playwright 的 `closedPromise`）。
     pub(crate) async fn close(self: &Arc<Self>) -> Result<(), DriverError> {
@@ -1594,6 +1676,16 @@ impl PageShared {
         base64::engine::general_purpose::STANDARD
             .decode(data)
             .map_err(|error| DriverError::new("Error", format!("Invalid screenshot data: {error}")))
+    }
+}
+
+/// 中止旗標的等待：設真即返回（10 ms 輪詢；沒有旗標時永不返回）。
+async fn abort_wait(flag: &Arc<AtomicBool>) {
+    loop {
+        if flag.load(Ordering::SeqCst) {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
     }
 }
 

@@ -8,13 +8,11 @@
 //!
 //! 後續的操作照 `frameSelectors.ts`：先 `injected.parseSelector(selector)`，
 //! 再 `injected.querySelectorAll(parsed, document)`（以 `Runtime.callFunctionOn`
-//! 在 injected object 上呼叫）。本檔只放呼叫的骨架與回傳值解析；各 API 的
+//! 在 injected object 上呼叫）。本檔放呼叫的骨架與回傳值解析；各 API 的
 //! 重試／逾時流程在 [`super::locator`]。
 //!
 //! 以下 API 尚無正式呼叫端，等對應步驟接上後移除 allow：
-//! - `InjectedScript::invalidate`（事件泵呼叫）。
-//! - `check_element_states`／`setup_hit_target_interceptor`（click／hover 用）。
-//! - `release_object`（淘汰重複建立時）。
+//! - `InjectedScript::release`（關閉前清理）。
 #![allow(dead_code)]
 
 use std::sync::Mutex;
@@ -33,23 +31,13 @@ const INJECTED_SCRIPT_OPTIONS: &str = r#"{"isUnderTest":false,"sdkLanguage":"jav
 const INJECTED_SCRIPT_SOURCE: &str = include_str!("js/injected-script.js");
 
 /// `Runtime.callFunctionOn` 在 injected object 上呼叫用的固定宣告：解析選擇器
-/// （先 `parseSelector`）、在主文件上查詢、依需要拋出 strict 違規，回傳元素
-/// （缺失時 undefined）與數量。
+/// （先 `parseSelector`）、在主文件上查詢、依需要拋出 strict 違規，回傳數量。
 const RESOLVE_ELEMENTS_SOURCE: &str = r#"(injected, { selector, strict }) => {
   const parsed = injected.parseSelector(selector);
   const elements = injected.querySelectorAll(parsed, injected.document);
   if (strict && elements.length > 1)
     throw injected.strictModeViolationError(parsed, elements);
   return elements.length;
-}"#;
-
-/// 解析選擇器並回傳**所有**元素（嚴格檢查；`evaluateAll` 用）。
-const RESOLVE_ALL_SOURCE: &str = r#"(injected, { selector, strict }) => {
-  const parsed = injected.parseSelector(selector);
-  const elements = injected.querySelectorAll(parsed, injected.document);
-  if (strict && elements.length > 1)
-    throw injected.strictModeViolationError(parsed, elements);
-  return elements;
 }"#;
 
 /// 解析選擇器：回傳**元素本身**（缺失時 undefined；`returnByValue: false` →
@@ -61,15 +49,6 @@ const RESOLVE_ELEMENT_SOURCE: &str = r#"(injected, { selector, strict }) => {
     throw injected.strictModeViolationError(parsed, elements);
   return elements[0] ?? undefined;
 }"#;
-
-/// 檢查元素狀態（click：`['visible','enabled','stable']`、hover：
-/// `['visible','stable']`；`injected.checkElementStates`）。
-const CHECK_ELEMENT_STATES_SOURCE: &str =
-    r#"async (injected, element, states) => injected.checkElementStates(element, states)"#;
-
-/// 安裝 hit target 攔截器（照 `dom.ts` 的 `_performPointerAction`）。
-const SETUP_HIT_TARGET_INTERCEPTOR_SOURCE: &str = r#"async (injected, element, actionType, hitPoint, blockAllEvents) =>
-      injected.setupHitTargetInterceptor(element, actionType, hitPoint, blockAllEvents)"#;
 
 /// 主框架 main world 的 injected script 把手：物件 id 與其建立的 context id。
 pub(crate) struct InjectedScript {
@@ -256,6 +235,41 @@ pub(crate) async fn call_function_on(
             ));
         }
     };
+    if let Some(details) = reply.get("exceptionDetails") {
+        return Err(DriverError::new(
+            "Error",
+            first_line_of(&super::page::get_exception_message(details)),
+        ));
+    }
+    Ok(reply.get("result").cloned().unwrap_or(Value::Null))
+}
+
+/// 在任意遠端物件上以 `Runtime.callFunctionOn` 呼叫一個宣告（element handle 用）。
+pub(crate) async fn call_on_object(
+    page: &PageShared,
+    declaration: &str,
+    object_id: &str,
+    args: Value,
+    return_by_value: bool,
+) -> Result<Value, DriverError> {
+    let mut arguments = Vec::new();
+    arguments.push(json!({"objectId": object_id}));
+    if let Value::Array(extra) = args {
+        arguments.extend(extra);
+    }
+    let reply = page
+        .send(
+            "Runtime.callFunctionOn",
+            json!({
+                "objectId": object_id,
+                "functionDeclaration": declaration,
+                "arguments": arguments,
+                "returnByValue": return_by_value,
+                "awaitPromise": true,
+                "userGesture": true,
+            }),
+        )
+        .await?;
     if let Some(details) = reply.get("exceptionDetails") {
         return Err(DriverError::new(
             "Error",
