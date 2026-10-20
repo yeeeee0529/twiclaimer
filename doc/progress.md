@@ -1,6 +1,6 @@
 # 進度
 
-- 目前步驟：S1.5 Locator（`wt/s15-locator`，接手代理 4 階段增量 commit 進行中）；S1.4、S1.6、S1.8（macOS 可驗部分）與 S2 階段全部完成
+- 目前步驟：三個子代理並行——S1.5 Locator 收尾（`wt/s15-locator`：click/hover 機制＋G5 錯誤 e2e＋crashed 頁兩缺口修復）、S3.1 twitch Helix（`wt/s31-twitch`）、S3.2 cgroup／resource monitor／restart／stall watchdog（`wt/s32-host`）；S1.4、S1.6、S1.8（macOS 可驗部分）與 S2 階段（S2.1–S2.6）全部完成
 - DEC-013 統一已完成（`c187b42`）：`sessions/recovery.rs` 與 `app/resource_guard.rs` 改用 `config::model`／`config::thresholds`（thresholds 的 bytes 以 u128 對應 JS bigint，使用處經 u128::from 無損轉換）；`CgroupSnapshot`／`CgroupMemoryEvents` 仍在 `app/resource_guard.rs`，等 S3.2 reader 落地時移過去
 - 觀察到的既有不穩定：`tests::browser_launch::cancelling_close_kills_a_browser_that_ignores_browser_close`（S1.3 假瀏覽器測試，非 ignore）在全套平行跑時失敗過一次（process group 收屍時序），單跑與後續全跑皆通過；持續觀察，若再現就檢查收屍等待的確定性
 - 卡住的項目：無
