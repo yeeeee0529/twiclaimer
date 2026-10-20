@@ -1,0 +1,8 @@
+<!doctype html><html><body>
+<div id="later" style="display:none">later</div>
+<div id="leaving">leaving</div>
+<script>
+  setTimeout(() => { document.getElementById('later').style.display = ''; }, 150);
+  setTimeout(() => { document.getElementById('leaving').remove(); }, 150);
+</script>
+</body></html>

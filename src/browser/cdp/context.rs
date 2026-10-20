@@ -56,6 +56,26 @@ impl DriverError {
     pub(crate) fn target_closed() -> Self {
         DriverError::new("Error", "Target page, context or browser has been closed")
     }
+
+    /// 逾時（X7：`Timeout <ms>ms exceeded.`；`TimeoutError` 名稱）。
+    pub(crate) fn timeout(ms: u128) -> Self {
+        DriverError::new("TimeoutError", format!("Timeout {ms}ms exceeded."))
+    }
+
+    /// 加上 `<api>: ` 前綴（X7：`message` 為 `<api>: <內容>`，只保留第一行——
+    /// 內容在產生時已是第一行，這裡只補前綴）。
+    pub(crate) fn with_api(mut self, api: &str) -> Self {
+        self.message = format!("{api}: {}", self.message);
+        self
+    }
+
+    /// execution context 被導覽摧毀（frames.ts 重試迴圈視為可重試：換新 context
+    /// 後元素可能回來）。
+    pub(crate) fn is_context_destroyed(&self) -> bool {
+        self.name == "Error"
+            && self.message
+                == "Execution context was destroyed, most likely because of a navigation."
+    }
 }
 
 impl std::fmt::Display for DriverError {

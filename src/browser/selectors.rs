@@ -2,6 +2,10 @@
 //!
 //! 字串內容一律從 `twitch-watchdog-docker/src/browser/` 逐字複製，不要改寫；
 //! 需要新選擇器時同樣以舊版原文為準。
+//!
+//! 呼叫端（ChannelHealthChecker／RewardClaimer 等的 Rust 版）在 S1.7 接上，
+//! 屆時移除 allow。
+#![allow(dead_code)]
 
 /// `ChannelHealthChecker.ts` 的 `CHANNEL_HEALTH_SELECTORS`（鍵名轉 snake_case，
 /// 字串值逐字相同）。
@@ -70,10 +74,12 @@ pub(crate) const SIDE_NAV_TOGGLE_SELECTOR: &str = "button[data-a-target=\"side-n
 pub(crate) const SIDE_NAV_SELECTOR: &str = "[data-a-target=\"side-nav-bar\"]";
 
 /// `StreamPlaybackOptimizer.ts` 的 `SETTINGS_BUTTON_SELECTOR`。
-pub(crate) const SETTINGS_BUTTON_SELECTOR: &str = "button[data-a-target=\"player-settings-button\"]";
+pub(crate) const SETTINGS_BUTTON_SELECTOR: &str =
+    "button[data-a-target=\"player-settings-button\"]";
 
 /// `StreamPlaybackOptimizer.ts` 的 `QUALITY_MENU_SELECTOR`。
-pub(crate) const QUALITY_MENU_SELECTOR: &str = "[data-a-target=\"player-settings-menu-item-quality\"]";
+pub(crate) const QUALITY_MENU_SELECTOR: &str =
+    "[data-a-target=\"player-settings-menu-item-quality\"]";
 
 /// `StreamPlaybackOptimizer.ts` 的 `QUALITY_OPTION_SELECTOR`。
 pub(crate) const QUALITY_OPTION_SELECTOR: &str = concat!(

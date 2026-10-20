@@ -2,8 +2,7 @@
 use super::*;
 
 /// 舊版 `ChannelHealthChecker.ts` 的字串值（供逐字比對）。
-const LOGIN_REQUIRED_TS: &str =
-    "[data-test-selector=\"login-required\"], [data-a-target=\"login-button\"], [data-channel-health=\"login-required\"]";
+const LOGIN_REQUIRED_TS: &str = "[data-test-selector=\"login-required\"], [data-a-target=\"login-button\"], [data-channel-health=\"login-required\"]";
 const LIVE_CONTENT_TS: &str = "[data-a-target=\"video-player\"], [data-test-selector=\"video-player\"], [data-channel-health=\"live\"]";
 const ERROR_TS: &str = "[data-test-selector=\"error-page\"], [data-a-target=\"player-error-message\"], [data-channel-health=\"error\"]";
 const OFFLINE_TS: &str = "[data-test-selector=\"offline-page\"], [data-a-target=\"offline-channel-main-content\"], [data-channel-health=\"offline\"]";
@@ -36,14 +35,26 @@ fn scalar_selectors_are_verbatim() {
         REWARD_BUTTON_LIKE_SELECTOR,
         "button:not([type=\"submit\"]), [role=\"button\"], input[type=\"button\"]"
     );
-    assert_eq!(SIDE_NAV_TOGGLE_SELECTOR, "button[data-a-target=\"side-nav-arrow\"]");
+    assert_eq!(
+        SIDE_NAV_TOGGLE_SELECTOR,
+        "button[data-a-target=\"side-nav-arrow\"]"
+    );
     assert_eq!(SIDE_NAV_SELECTOR, "[data-a-target=\"side-nav-bar\"]");
-    assert_eq!(SETTINGS_BUTTON_SELECTOR, "button[data-a-target=\"player-settings-button\"]");
-    assert_eq!(QUALITY_MENU_SELECTOR, "[data-a-target=\"player-settings-menu-item-quality\"]");
+    assert_eq!(
+        SETTINGS_BUTTON_SELECTOR,
+        "button[data-a-target=\"player-settings-button\"]"
+    );
+    assert_eq!(
+        QUALITY_MENU_SELECTOR,
+        "[data-a-target=\"player-settings-menu-item-quality\"]"
+    );
     assert_eq!(
         QUALITY_OPTION_SELECTOR,
         "[data-a-target=\"player-settings-menu-item-quality-option\"], [role=\"menuitemradio\"]"
     );
     assert_eq!(VIDEO_SELECTOR, "video");
-    assert_eq!(VIDEO_PLAYER_SELECTOR, "[data-a-target=\"video-player\"], video");
+    assert_eq!(
+        VIDEO_PLAYER_SELECTOR,
+        "[data-a-target=\"video-player\"], video"
+    );
 }

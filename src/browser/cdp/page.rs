@@ -36,6 +36,7 @@ use tokio::sync::{mpsc, watch};
 
 use super::connection::Event;
 use super::context::{ContextShared, DriverError, InterceptionKind};
+use super::injected::InjectedScript;
 use super::launcher::{CancelListener, LaunchedBrowser};
 
 /// 導覽等待的預設逾時（§7.4：30 000 ms；`setDefaultNavigationTimeout` 覆寫）。
@@ -212,6 +213,8 @@ pub(crate) struct PageShared {
     navigation_timeout_ms: AtomicU64,
     /// 攔截與網路狀態（鎖內不做 await）。
     network: Mutex<NetworkState>,
+    /// 主框架 main world 的 injected script 把手（X8；事件泵在 context 變動時清空）。
+    injected: InjectedScript,
     closed: AtomicBool,
     crashed: AtomicBool,
     /// 初始化成功的頁面（照 Playwright 的 `initializedOrUndefined`）。
@@ -254,6 +257,7 @@ impl PageShared {
             main_frame_id: Mutex::new(String::new()),
             navigation_timeout_ms: AtomicU64::new(DEFAULT_NAVIGATION_TIMEOUT_MS),
             network: Mutex::new(NetworkState::default()),
+            injected: InjectedScript::default(),
             closed: AtomicBool::new(false),
             crashed: AtomicBool::new(false),
             initialized: AtomicBool::new(false),
@@ -289,6 +293,11 @@ impl PageShared {
     /// 目前的 URL（`page.url()`）。
     pub(crate) fn url(&self) -> String {
         self.snapshot.borrow().url.clone()
+    }
+
+    /// 主框架 main world 的 injected script 把手（locator／evaluate 用）。
+    pub(crate) fn injected(&self) -> &InjectedScript {
+        &self.injected
     }
 
     /// 導覽逾時（毫秒）。
@@ -723,6 +732,8 @@ impl PageShared {
                     && context_frame == Some(page.main_frame_id().as_str())
                     && let Some(context_id) = context_id
                 {
+                    // 舊 context 的 injected 物件已失效：對不上新 id 時清空（X8）。
+                    page.injected.invalidate_on_new_context(context_id);
                     let mut snapshot = page.snapshot.borrow().clone();
                     snapshot.context_id = Some(context_id);
                     let _ = page.snapshot.send(snapshot);
@@ -733,6 +744,14 @@ impl PageShared {
                     .params
                     .get("executionContextId")
                     .and_then(Value::as_i64);
+                // injected script 隨 execution context 摧毀（X8）：丟棄建立的物件，
+                // 下次使用重建（只有頁面主 session 的事件決定主框架的 context）。
+                if main {
+                    match event.method.as_str() {
+                        "Runtime.executionContextDestroyed" => page.injected.invalidate(destroyed),
+                        _ => page.injected.invalidate(None),
+                    }
+                }
                 let mut snapshot = page.snapshot.borrow().clone();
                 let matches = match (event.method.as_str(), destroyed, snapshot.context_id) {
                     ("Runtime.executionContextDestroyed", Some(id), Some(current)) => id == current,
@@ -1376,6 +1395,61 @@ impl PageShared {
             ));
         }
         Ok(reply.get("result").cloned().unwrap_or(Value::Null))
+    }
+
+    /// `page.evaluate(fn, arg)`（§7.4）：主框架 main world 以 `Runtime.callFunctionOn`
+    /// 呼叫函式（照 `crExecutionContext.ts` 的 `evaluateExpression`：函式宣告 +
+    /// `arguments: [{value: arg}]`、`returnByValue: true`、`awaitPromise: true`）。
+    ///
+    /// 例外照 `getExceptionMessage`（`Error: boom`）→ 只保留第一行（X7）；
+    /// 協定錯誤（非已關閉）照 `rewriteError` 視為 context 被導覽摧毀。
+    pub(crate) async fn evaluate_function(
+        &self,
+        fn_declaration: &str,
+        arg: Option<Value>,
+    ) -> Result<Value, DriverError> {
+        let context_id = self.wait_main_world_context().await?;
+        // arg 為 None 時不帶 value 項（照 JSON.stringify 丟棄 undefined 的行為）。
+        let arguments = match arg {
+            Some(arg) => json!([{"value": arg}]),
+            None => json!([]),
+        };
+        let reply = self
+            .send(
+                "Runtime.callFunctionOn",
+                json!({
+                    "functionDeclaration": fn_declaration,
+                    "executionContextId": context_id,
+                    "arguments": arguments,
+                    "returnByValue": true,
+                    "awaitPromise": true,
+                    "userGesture": true,
+                }),
+            )
+            .await;
+        let reply = match reply {
+            Ok(reply) => reply,
+            Err(error) if error == DriverError::target_closed() => return Err(error),
+            // 照 crExecutionContext 的 `rewriteError`：協定錯誤一律視為 context 摧毀。
+            Err(_) => {
+                return Err(DriverError::new(
+                    "Error",
+                    "Execution context was destroyed, most likely because of a navigation.",
+                ));
+            }
+        };
+        if let Some(details) = reply.get("exceptionDetails") {
+            return Err(DriverError::new(
+                "Error",
+                crate::browser::cdp::injected::first_line_of(&get_exception_message(details)),
+            ));
+        }
+        // `returnByValue: true`：值在 `result.value`（undefined 回傳時無 value 欄）。
+        Ok(reply
+            .get("result")
+            .and_then(|result| result.get("value"))
+            .cloned()
+            .unwrap_or(Value::Null))
     }
 
     /// 等主框架 main world 的 execution context（導覽後重建；30 秒防線）。

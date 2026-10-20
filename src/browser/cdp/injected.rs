@@ -40,7 +40,7 @@ const RESOLVE_ELEMENTS_SOURCE: &str = r#"(injected, { selector, strict }) => {
   const elements = injected.querySelectorAll(parsed, injected.document);
   if (strict && elements.length > 1)
     throw injected.strictModeViolationError(parsed, elements);
-  return { count: elements.length, element: elements[0] ?? undefined };
+  return elements.length;
 }"#;
 
 /// 解析選擇器並回傳**所有**元素（嚴格檢查；`evaluateAll` 用）。
@@ -52,14 +52,23 @@ const RESOLVE_ALL_SOURCE: &str = r#"(injected, { selector, strict }) => {
   return elements;
 }"#;
 
+/// 解析選擇器：回傳**元素本身**（缺失時 undefined；`returnByValue: false` →
+/// RemoteObject 帶 objectId，click／hover 的 DOM 指令需要）。
+const RESOLVE_ELEMENT_SOURCE: &str = r#"(injected, { selector, strict }) => {
+  const parsed = injected.parseSelector(selector);
+  const elements = injected.querySelectorAll(parsed, injected.document);
+  if (strict && elements.length > 1)
+    throw injected.strictModeViolationError(parsed, elements);
+  return elements[0] ?? undefined;
+}"#;
+
 /// 檢查元素狀態（click：`['visible','enabled','stable']`、hover：
 /// `['visible','stable']`；`injected.checkElementStates`）。
 const CHECK_ELEMENT_STATES_SOURCE: &str =
     r#"async (injected, element, states) => injected.checkElementStates(element, states)"#;
 
 /// 安裝 hit target 攔截器（照 `dom.ts` 的 `_performPointerAction`）。
-const SETUP_HIT_TARGET_INTERCEPTOR_SOURCE: &str =
-    r#"async (injected, element, actionType, hitPoint, blockAllEvents) =>
+const SETUP_HIT_TARGET_INTERCEPTOR_SOURCE: &str = r#"async (injected, element, actionType, hitPoint, blockAllEvents) =>
       injected.setupHitTargetInterceptor(element, actionType, hitPoint, blockAllEvents)"#;
 
 /// 主框架 main world 的 injected script 把手：物件 id 與其建立的 context id。
@@ -130,10 +139,7 @@ impl InjectedScript {
                 *state = Some(existing.clone());
                 drop(state);
                 if context == context_id {
-                    page.send_may_fail(
-                        "Runtime.releaseObject",
-                        json!({"objectId": stale}),
-                    );
+                    page.send_may_fail("Runtime.releaseObject", json!({"objectId": stale}));
                 }
                 Ok(existing.1)
             }
@@ -172,6 +178,20 @@ impl InjectedScript {
         }
     }
 
+    /// 新 execution context 建立（主框架）：舊 context 上的 injected 物件已失效，
+    /// 對不上新 id 時清空（照 frames.ts 的 `contextCreated`：舊 context 摧毀）。
+    pub(crate) fn invalidate_on_new_context(&self, new_context_id: i64) {
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some((created, _)) = state.as_ref()
+            && *created != new_context_id
+        {
+            *state = None;
+        }
+    }
+
     /// 釋放（`Runtime.releaseObject`）不再使用的 injected 物件（關閉前清理）。
     pub(crate) async fn release(&self, page: &PageShared) {
         let Some((_, object_id)) = self.locked_state() else {
@@ -182,10 +202,7 @@ impl InjectedScript {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
         let _ = page
-            .send(
-                "Runtime.releaseObject",
-                json!({"objectId": object_id}),
-            )
+            .send("Runtime.releaseObject", json!({"objectId": object_id}))
             .await;
     }
 }
@@ -248,48 +265,47 @@ pub(crate) async fn call_function_on(
     Ok(reply.get("result").cloned().unwrap_or(Value::Null))
 }
 
-/// 解析選擇器：回傳 `(count, element)`；`element` 為 RemoteObject
-/// （元素缺失時 `type: "undefined"`）。strict 違規直接拋 Error（第一行）。
-pub(crate) async fn resolve_elements(
+/// 解析選擇器：回傳符合的元素數量。strict 違規直接拋 Error（第一行）。
+pub(crate) async fn resolve_count(
     page: &PageShared,
     injected: &InjectedScript,
     selector: &str,
     strict: bool,
-    all: bool,
-) -> Result<(i64, Option<Value>), DriverError> {
-    let declaration = if all {
-        // `evaluateAll`：回傳陣列本身（RemoteObject）。
-        RESOLVE_ALL_SOURCE
-    } else {
-        RESOLVE_ELEMENTS_SOURCE
-    };
+) -> Result<i64, DriverError> {
     let result = call_function_on(
         page,
         injected,
-        declaration,
+        RESOLVE_ELEMENTS_SOURCE,
+        json!([{"value": {"selector": selector, "strict": strict}}]),
+        true,
+    )
+    .await?;
+    if remote_is_undefined(&result) {
+        return Ok(0);
+    }
+    Ok(remote_value(&result).as_i64().unwrap_or(0))
+}
+
+/// 解析選擇器並回傳**元素本身**的 RemoteObject（帶 objectId；click／hover 的
+/// `DOM.scrollIntoViewIfNeeded`／`DOM.getContentQuads` 需要）。缺失時回 None。
+pub(crate) async fn resolve_element_object(
+    page: &PageShared,
+    injected: &InjectedScript,
+    selector: &str,
+    strict: bool,
+) -> Result<Option<Value>, DriverError> {
+    let result = call_function_on(
+        page,
+        injected,
+        RESOLVE_ELEMENT_SOURCE,
         json!([{"value": {"selector": selector, "strict": strict}}]),
         false,
     )
     .await?;
-    if all {
-        // 陣列本身：缺失（undefined）時 count 為 0。
-        let count = if result
-            .get("type")
-            .and_then(Value::as_str)
-            .is_some_and(|r#type| r#type == "undefined")
-        {
-            0
-        } else {
-            1
-        };
-        return Ok((count, Some(result)));
+    if remote_is_undefined(&result) {
+        return Ok(None);
     }
-    let count = result.get("value").and_then(|value| value.get("count")).and_then(Value::as_i64).unwrap_or(0);
-    let element = result
-        .get("objectId")
-        .filter(|_| result.get("value").and_then(|value| value.get("element")).is_some())
-        .map(|object_id| json!({"objectId": object_id}));
-    Ok((count, element))
+    Ok(Some(result))
 }
 
 /// 遠端物件是否為字串，回傳其值（`error:notconnected` 之類的哨兵判讀用）。

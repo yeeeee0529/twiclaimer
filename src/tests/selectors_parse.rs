@@ -19,7 +19,8 @@ use crate::browser::selectors::{
 };
 
 /// 在主框架 main world 解析選擇器（只驗證不拋錯，回傳 part 數）。
-const PARSE_SELECTOR_SOURCE: &str = r#"(injected, selector) => injected.parseSelector(selector).parts.length"#;
+const PARSE_SELECTOR_SOURCE: &str =
+    r#"(injected, selector) => injected.parseSelector(selector).parts.length"#;
 
 /// 逐一列出所有集中管理的選擇器（含 ChannelHealth 的五個值）。
 fn all_selectors() -> Vec<(&'static str, String)> {
@@ -75,10 +76,7 @@ fn all_selectors() -> Vec<(&'static str, String)> {
             QUALITY_OPTION_SELECTOR.to_string(),
         ),
         ("VIDEO_SELECTOR", VIDEO_SELECTOR.to_string()),
-        (
-            "VIDEO_PLAYER_SELECTOR",
-            VIDEO_PLAYER_SELECTOR.to_string(),
-        ),
+        ("VIDEO_PLAYER_SELECTOR", VIDEO_PLAYER_SELECTOR.to_string()),
     ]
 }
 

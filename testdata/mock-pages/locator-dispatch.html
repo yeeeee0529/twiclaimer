@@ -1,0 +1,10 @@
+<!doctype html><html><body>
+<button id="btn">click me</button><span id="counter">0</span>
+<script>
+  let clicks = 0;
+  document.getElementById('btn').addEventListener('click', () => {
+    clicks += 1;
+    document.getElementById('counter').textContent = String(clicks);
+  });
+</script>
+</body></html>
