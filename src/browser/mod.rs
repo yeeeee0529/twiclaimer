@@ -2,6 +2,7 @@
 pub(crate) mod cdp;
 pub(crate) mod channel_url;
 pub(crate) mod diagnostics;
+pub(crate) mod manager;
 pub(crate) mod page_adapter;
 pub(crate) mod safe_logging;
 pub(crate) mod selectors;

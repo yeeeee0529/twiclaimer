@@ -290,13 +290,23 @@ pub(crate) trait BrowserRestartedObserver: Send + Sync {
     fn on_browser_restarted(&self, event: BrowserRestartedEvent) -> Result<(), DriverError>;
 }
 
+/// 舊版 fatal recovery request 的 `fields?: Readonly<Record<string, unknown>>`：
+/// 本層傳出的欄位只有字串與數字。`SanitizedValue` 內含 `Rc` 不可 `Send`，
+/// 無法跨背景任務（fire-and-forget 的觀察者呼叫）傳遞，故以封閉的 Send
+/// 型別表達；組裝端（S3.6 的 ContainerRestartController）自行轉回消毒值型別。
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum FatalRecoveryFieldValue {
+    Str(String),
+    Num(f64),
+}
+
 /// 舊版 `BrowserFatalRecoveryObserver` 的參數（`{reason, fields?}`）。
 ///
 /// 復原耗盡或無法證明終止時呼叫；`fields` 為 `None` 表示舊版省略欄位。
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct FatalRecoveryRequest {
     pub(crate) reason: String,
-    pub(crate) fields: Option<SanitizedValue>,
+    pub(crate) fields: Option<Vec<(String, FatalRecoveryFieldValue)>>,
 }
 
 /// 舊版 `BrowserFatalRecoveryObserver`（同 invalidation observer：以 `Err` 表達拋錯）。
