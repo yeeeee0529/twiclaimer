@@ -13,7 +13,7 @@ if [[ "${1:-}" == "--strict" ]]; then
 fi
 titles=doc/spec/ts-test-titles.tsv
 [[ -f $titles ]] || { echo "找不到 $titles（先執行 tools/ref/extract-spec.sh）" >&2; exit 2; }
-tmp=$(mktemp -d)
+tmp=$(mktemp -d "${TMPDIR:-/tmp}/twicover.XXXXXX")
 trap 'rm -rf "$tmp"' EXIT
 trim() { sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//'; }
 

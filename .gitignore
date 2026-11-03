@@ -4,3 +4,4 @@ node_modules/
 doc/spec/traces/*.pw.log
 s0-logs*.jsonl
 .DS_Store
+.worktrees/

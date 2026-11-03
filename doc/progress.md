@@ -1,33 +1,37 @@
 # 進度
 
-- 目前狀態：**暫停中（使用者指示）**。S1 全階段（S1.1–S1.8）、S2 階段（S2.1–S2.6）、S3.1–S3.3 全部完成；無執行中的代理
-- DEC-013 統一已完成（`c187b42`）：`sessions/recovery.rs` 與 `app/resource_guard.rs` 改用 `config::model`／`config::thresholds`（thresholds 的 bytes 以 u128 對應 JS bigint，使用處經 u128::from 無損轉換）；`CgroupSnapshot`／`CgroupMemoryEvents` 仍在 `app/resource_guard.rs`，等 S3.2 reader 落地時移過去
+- 目前狀態：**暫停中（使用者指示）**。已完成步驟：S1.1–S1.6、S1.8、S2.1–S2.6、S3.1–S3.3；未開始：S1.7、S3.4–S3.6、S4、S5。S0.1–S0.7 尚未執行，S1／S2／S3 關卡尚未記錄通過；無執行中的代理
+- 測試移植（2026-11-03 以 `scripts/port-coverage.sh` 量測）：舊清單 422 筆（標題去重）已處置 230、缺 192、未知標題 0；缺少的 192 筆全屬 S1.7、S3.4–S3.6、S4
+- DEC-013 統一已完成（`c187b42`）：`sessions/recovery.rs` 與 `app/resource_guard.rs` 改用 `config::model`／`config::thresholds`（thresholds 的 bytes 以 u128 對應 JS bigint，使用處經 u128::from 無損轉換）；`CgroupSnapshot`／`CgroupMemoryEvents` 已於 S3.2 移到 `app/cgroup.rs`（`resource_guard.rs` 改為 re-import）
 - 觀察到的既有不穩定：
   - `tests::browser_launch::cancelling_close_kills_a_browser_that_ignores_browser_close`（S1.3 假瀏覽器測試，非 ignore）在全套平行跑時失敗過一次（process group 收屍時序），單跑與後續全跑皆通過；持續觀察
   - `tests::browser_diagnostics::page_adapter_converts…`（S1.6 e2e）2026-10-20 在 `--ignored --test-threads=2` 全量跑失敗一次，單跑與重跑全量皆過
   - `tests::multi_page::sigkill…`（S1.8 e2e）同日同模式失敗一次——查出是 S1.8 寫時尚未有 X7 前綴的**過時斷言**（已依 pw-errors.jsonl 修正為 `page.evaluate: …`），修正後全量重跑全過
   - `tests::browser_diagnostics::browser_manager_logs…`（S3.3 e2e）2026-10-20 首次全量跑失敗一次，單跑與重跑全量皆過
   - 共同特徵：都在平行負載下的 e2e 時序敏感斷言；若再現就收緊 `eventually` 的輪詢視窗
+- 待決策：舊版（`twitch-watchdog-docker`）在基準 `e0e079a` 後另有 `306b4ba`、`d49363d` 兩個 commit，動到尚未移植的 ChannelSession／SessionManager／Telegram，並新增 11 個 test 宣告（含 `it.each`）；`doc/spec/ts-test-titles.tsv` 於 2026-10-19 抽出，未包含這些。移植 S3.4／S3.5／S4 前先決定是否納入
 - 卡住的項目：無
 
 ## 階段
 
 | 階段 | 估計上限 | 停止門檻 | 已用 | 狀態 |
 | --- | --- | --- | --- | --- |
-| S0 | 0.5 天 + 24 小時 | 0.75 天 | | 未開始 |
-| S1 | 5 天 | 7.5 天 | 0.4 天 | 進行中 |
-| S2 | 6 天 | 9 天 | | 未開始 |
-| S3 | 9 天 | 13.5 天 | | 未開始 |
-| S4 | 4 天 | 6 天 | | 未開始 |
-| S5 | 3 天 + 24–72 小時 | 4.5 天 | | 未開始 |
+| S0 | 0.5 天 + 24 小時 | 0.75 天 | 0 | 未開始 |
+| S1 | 5 天 | 7.5 天 | 2.1 | 進行中（S1.7 未開始；其餘完成） |
+| S2 | 6 天 | 9 天 | 1.5 | 步驟完成，關卡未記錄 |
+| S3 | 9 天 | 13.5 天 | 0.8 | 進行中（S3.1–S3.3 完成；S3.4–S3.6 未開始） |
+| S4 | 4 天 | 6 天 | 0 | 未開始 |
+| S5 | 3 天 + 24–72 小時 | 4.5 天 | 0 | 未開始 |
+
+「已用」為已完成步驟「耗時」欄的累計；S1–S3 有平行執行，與牆鐘時間不同。
 
 ## 步驟
 
 | 步驟 | 狀態 | 完成日期 | 耗時 | 驗證結果 | commit |
 | --- | --- | --- | --- | --- | --- |
 | S0.1–S0.7 | 未開始 | | | | |
-| S1.1 | 完成 | 2026-10-19 | 0.2 天 | `scripts/check.sh` 全綠（fmt／clippy／test、npm test 7 個、port-coverage 8 已處置／0 未知）；`extract-spec.sh` 產出 397 列測試標題與 149 個日誌事件 | S1.1 |
-| S1.2 | 完成 | 2026-10-19 | 0.2 天 | `pw-errors.jsonl` 33 列；9 組錄製均有 `.seq` 與 `.diag.jsonl`；`chromium-args.txt` 45 個參數含 `--remote-debugging-pipe`；二次錄製 `git diff` 零差異；`src/browser/js/` 6 個頁面內 JS 逐字複製並通過 Node 語法檢查 | S1.2 |
+| S1.1 | 完成 | 2026-10-19 | 0.2 天 | `scripts/check.sh` 全綠（fmt／clippy／test、npm test 7 個、port-coverage 8 已處置／0 未知）；`extract-spec.sh` 產出 397 列測試標題與 149 個日誌事件（DEC-010／011 修正抽取後為 423 列、422 個唯一標題） | 3f6eee5 |
+| S1.2 | 完成 | 2026-10-19 | 0.2 天 | `pw-errors.jsonl` 33 列；9 組錄製均有 `.seq` 與 `.diag.jsonl`；`chromium-args.txt` 45 個參數含 `--remote-debugging-pipe`；二次錄製 `git diff` 零差異；`src/browser/js/` 6 個頁面內 JS 逐字複製並通過 Node 語法檢查 | 35d355d |
 | S1.3 | 完成 | 2026-10-19 | 0.5 天 | transport（6）＋ connection 路由（13）＋ Connection 讀寫接線（10）＋ launcher 程序面機制（16）＝45 個測試；本段完成 launch 握手（`getVersion` → `setAutoAttach`，180 秒整體逾時、Playwright 同款訊息）、`LaunchedBrowser` 的 close／drop／取消／EOF 防線（一律整群 `SIGKILL`、背景收屍）與 disconnected 觸發一次、macOS 的 `dup2` 退路（DEC-007）。83 個單元＋3 個 e2e（真實 headless shell：`get_version()` 為 `151.0.7922.34`、錄製參數逐行比對、close／drop 後無殘留程序與暫存目錄）全過，clippy 乾淨；G8 的 Linux 部分留 Docker test stage | a9f94fc |
 | S1.4 | 完成 | 2026-10-19 | 0.5 天 | context（cookies 轉換、localStorage 暫時頁、setDownloadBehavior）＋page 初始化序列＋嵌套 auto-attach（page／iframe OOPIF／worker／popup）＋資源阻擋／聊天室封鎖（init script 雜湊逐位元組）＋`goto`／`screenshot`／`close`＋**probe 子命令**（`#[path]` 掛載，DEC-014）。**G2 通過：9 組錄製 CDP 順序全部相同；diag-diff 診斷也 9 組全部相同（G3 比對工具零差異）**，並以修好的 repo 腳本（bash 3.2 相容）重跑確認。債：page.rs／context.rs／probe.rs 尚無單元測試（S1.6 補 listener 測試時一併補）；G4 的 trace 匯出仍屬【人工】 | 
 | S1.5 | 完成 | 2026-10-20 | 0.4 天 | injected script 生命週期（X8）＋locator 全套 API（count／isVisible／waitFor／getAttribute／textContent／evaluate／evaluateAll／dispatchEvent／click／hover，selector 組合照 `locator.ts`）＋click/hover 重試機制（`[0,20,100,100,500]` 間隔、checkElementStates、scrollIntoView 輪替、getContentQuads＋LayoutMetrics、hit target 攔截器、訊號屏障）＋`reload`／`mouse.move`／`evaluate(fn, arg)`＋abort 機制（`AbortError`）。**G5：pw-errors.jsonl 33/33 全過**（e2e 5.1 秒）。三個代理接力完成（前兩個 session 中斷，第四棒收尾）；期間新發現並修復：`send` 的 `is_closed()` 快速失敗、crashed session 短線路（`Target crashed ` 帶尾端空白，S1.8 待整合項 1）、`close()` crashed 時仍送 `Target.closeTarget`（待整合項 2）。積壓整合：事件泵 GraphQL 抽出已改接 `diagnostics.rs` 純函式（UTF-16 截斷語意，G3 回歸 9/9 綠）。S1.8 的 sigkill e2e 斷言依 X7 加上 `page.evaluate: ` 前綴（pw-errors.jsonl 為準） | 
