@@ -69,11 +69,9 @@ pub(crate) const REWARD_BUTTON_LIKE_SELECTOR: &str =
     "button:not([type=\"submit\"]), [role=\"button\"], input[type=\"button\"]";
 
 /// `SideNavCollapser.ts` 的 `SIDE_NAV_TOGGLE_SELECTOR`。
-#[allow(dead_code)]
 pub(crate) const SIDE_NAV_TOGGLE_SELECTOR: &str = "button[data-a-target=\"side-nav-arrow\"]";
 
 /// `SideNavCollapser.ts` 的 `SIDE_NAV_SELECTOR`。
-#[allow(dead_code)]
 pub(crate) const SIDE_NAV_SELECTOR: &str = "[data-a-target=\"side-nav-bar\"]";
 
 /// `StreamPlaybackOptimizer.ts` 的 `SETTINGS_BUTTON_SELECTOR`。
