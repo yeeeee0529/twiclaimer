@@ -141,3 +141,19 @@
 - 影響：極端 UI 狀態下，quality menu／option 點擊可能比舊版更容易逾時；錯誤仍只記 `stream_quality_skipped`，不影響觀看。
 - 另：bin 的暫行掛載新增只含 `config::model` 的 `config` 模組（不掛整個 config），
   因為 S1.7 的 browser 模組需要該型別；S3.6 接線後與 browser／logging 一起移除。
+
+## DEC-016 移植基準更新：納入舊版 `306b4ba`、`d49363d` 兩個 commit（取代 §0 的基準設定）
+
+- 日期：2026-11-03（恢復移植時）
+- 問題：計畫 §0 定基準為舊版 `e0e079a`；其後舊版另有 `306b4ba`（Telegram 查詢停頓時保持回應）與 `d49363d`（登入健康檢查失敗後退避：ChannelHealthChecker／ChannelSession／SessionManager），合計新增 11 個 test 宣告（10 個唯一標題），且 `doc/spec/ts-test-titles.tsv` 是從 `e0e079a` 抽出的。尚未移植的步驟（S3.4 的 ChannelSession／ChannelHealthChecker、S3.5、S4.2）都以舊版原始檔為行為依據，會直接踩到新版行為；S1.7 的四個頁面操作模組、SideNavCollapser、Discord 與 notifications 不受這兩個 commit 影響（對照過 commit 清單）。
+- 決定（使用者裁示 2026-11-03）：**兩個 commit 都納入**。尚未移植模組（S3.4 剩餘、S3.5、S4.2）以舊版 `d49363d`（HEAD）為行為依據；重跑 `tools/ref/extract-spec.sh`（433 標題、432 唯一、log-events 149→152，新增 `channel_health_recovery_backoff`／`telegram_query_failed`／`telegram_query_timeout`）。已完成的移植不需要回頭改（對照過兩個 commit 沒有動到已移植模組的原始檔）；已完成的單元測試綠燈也不受影響。若後續舊版再出現新 commit，沿用同一辦法：重抽清單、記 decisions、以 HEAD 為行為依據。
+- 理由：R7／A／B 的對照組是「正在跑的舊版」；停在舊基準會移植到退化的行為，S5 之後還要再補一次雙重工作。
+- 影響：S3.4／S3.5／S4.2 的關卡要再一次 `port-coverage --strict`（新標題）；log-events.txt 新增 3 個事件名稱，§7.7「事件名稱只能使用 log-events.txt」以更新後清單為準。`$OLD` 讀取時以 working tree 現況（`d49363d`）為準，不要 checkout。
+
+## DEC-017 `Locator::evaluate` 的 undefined 回值不再視為「沒有元素」（S1.7 e2e 揭露後修正 cdp 層）
+
+- 日期：2026-11-03（步驟：S1.7 e2e）
+- 問題：移植 reward-claimer e2e 時發現 `src/browser/cdp/locator.rs` 的 `evaluate` 把使用者函式回傳 `undefined` 誤判為「元素不存在」而輪詢至逾時（舊 e2e 中「移除屬性／改 class／動態補按鈕／pointerEvents='none'」四個案例原本都會以 `locator.evaluate: Timeout 1000ms exceeded.` 失敗）。
+- 決定：依 Playwright 1.62.1 實際行為修正（`$OLD/node_modules/playwright-core` bundle 的 `locator.ts`／`frames.ts`：client 端 `_withElement` 先輪詢到元素 attach，元素存在後就直接 `parseResult` 回傳，不再輪詢）。實作改為 `EVALUATE_ELEMENT_SOURCE` 回 `{ elementFound, result }`，Rust 端僅在 `elementFound === false` 時輪詢。找不到元素的逾時訊息（`locator.evaluate: Timeout Nms exceeded.`）與 `doc/spec/pw-errors.jsonl` 的 `locator-evaluate-missing` 案例維持不變，既有的 errors e2e 與 S1.5／S1.6／S1.8／S3.3 的 e2e 全部照綠。
+- 理由：§7.4 的「頁面內邏輯直接使用 Playwright 的 injected script」的精神，就是以 Playwright 實際運作為依據；「未找到元素」與「函式回傳 undefined」在原始語意中不同。
+- 影響：`src/browser/cdp/locator.rs`；本文件與計畫 §7.4 表格「等到元素存在；strict」的語意補充——之後 evaluate-with-element 一類 API 也要遵守同一語意。

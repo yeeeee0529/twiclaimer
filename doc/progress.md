@@ -1,8 +1,9 @@
 # 進度
 
-- 目前狀態：**暫停中（使用者指示）**。已完成步驟：S1.1–S1.6、S1.8、S2.1–S2.6、S3.1–S3.3；未開始：S1.7、S3.4–S3.6、S4、S5。S0.1–S0.7 尚未執行，S1／S2／S3 關卡尚未記錄通過；無執行中的代理
-- 測試移植（2026-11-03 以 `scripts/port-coverage.sh` 量測）：舊清單 422 筆（標題去重）已處置 230、缺 192、未知標題 0；缺少的 192 筆全屬 S1.7、S3.4–S3.6、S4
-- DEC-013 統一已完成（`c187b42`）：`sessions/recovery.rs` 與 `app/resource_guard.rs` 改用 `config::model`／`config::thresholds`（thresholds 的 bytes 以 u128 對應 JS bigint，使用處經 u128::from 無損轉換）；`CgroupSnapshot`／`CgroupMemoryEvents` 已於 S3.2 移到 `app/cgroup.rs`（`resource_guard.rs` 改為 re-import）
+- 目前狀態：**進行中（2026-11-03 恢復）**。已完成步驟：S1.1–S1.6、S1.8、S2.1–S2.6、S3.1–S3.3；部分完成：S1.7（模組＋單元測試全數完成：reward‑claimer 19、channel‑points‑reader 7、stream‑playback‑optimizer 6；e2e reward‑claimer 10/10 完成）、S3.4（SideNavCollapser 4/4 完成）。S1.7 其餘 e2e（playback 1、chat‑blocking 2、channel‑points 4）與 S3.4 剩餘、S3.5–S3.6、S4、S5 未完成。執行中的代理（背景、個別 worktree 分支）：s17‑e2e‑rest（playback／chat‑blocking／channel‑points e2e）、s43‑discord（S4.1＋S4.3）、s34‑session（S3.4 ChannelSession＋health＋e2e）
+- 測試移植（2026-11-03 以 `scripts/port-coverage.sh` 量測）：舊清單已更新至 432 筆（唯一標題，基準改為 `d49363d`，見 DEC-016）：已處置 276、缺 156、未知標題 0；缺少的集中在 S1.7 殘餘 e2e、S3.4–S3.6、S4
+- DEC-016：使用者裁示**納入**舊版 `306b4ba`、`d49363d` 兩個 commit（基準改為 `d49363d`），重跑 `extract-spec.sh`（+10 唯一標題、log‑events +3 事件）；已完成的移植不回頭改（兩 commit 未動到已移植模組）
+- DEC-017：`Locator::evaluate` 的 undefined 回值不再視為「沒有元素」（S1.7 e2e 揭露，依 Playwright 1.62.1 實際行為修正 `src/browser/cdp/locator.rs`）；existing e2e 全綠
 - 觀察到的既有不穩定：
   - `tests::browser_launch::cancelling_close_kills_a_browser_that_ignores_browser_close`（S1.3 假瀏覽器測試，非 ignore）在全套平行跑時失敗過一次（process group 收屍時序），單跑與後續全跑皆通過；持續觀察
   - `tests::browser_diagnostics::page_adapter_converts…`（S1.6 e2e）2026-10-20 在 `--ignored --test-threads=2` 全量跑失敗一次，單跑與重跑全量皆過

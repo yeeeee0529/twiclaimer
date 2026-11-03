@@ -8,8 +8,10 @@ test/e2e/channel-session.spec.ts:16	展開的 Twitch 左側欄會自動收合
 test/e2e/channel-session.spec.ts:28	live 頁面判定 healthy
 test/e2e/channel-session.spec.ts:38	content-warning 頁面會確認後判定 healthy
 test/e2e/channel-session.spec.ts:51	login-required 頁面回報 login_required
-test/e2e/channel-session.spec.ts:61	error 頁面回報 error_page
-test/e2e/channel-session.spec.ts:71	offline 頁面回報 offline
+test/e2e/channel-session.spec.ts:61	一般登入按鈕回報 login_missing，明確登入阻擋才回報 login_required
+test/e2e/channel-session.spec.ts:81	隱藏登入按鈕不誤判，未登入也保留播放器錯誤與離線原因
+test/e2e/channel-session.spec.ts:96	error 頁面回報 error_page
+test/e2e/channel-session.spec.ts:106	offline 頁面回報 offline
 test/e2e/chat-blocking.spec.ts:8	chat WebSocket is replaced by a silent fake socket
 test/e2e/chat-blocking.spec.ts:32	non-chat WebSocket URLs use the real constructor
 test/e2e/playback-optimizer.spec.ts:5	播放器優化器會靜音並選擇最低可用畫質
@@ -112,10 +114,11 @@ test/unit/cgroup-v2-reader.test.ts:145	memory.max 為 max 時視為不可用
 test/unit/cgroup-v2-reader.test.ts:159	缺少 memory.current 時標記為不可用
 test/unit/cgroup-v2-reader.test.ts:170	可透過 mountinfo + /proc/self/cgroup 解析命名空間路徑
 test/unit/cgroup-v2-reader.test.ts:206	memory.current 格式錯誤時拋出讀取錯誤
-test/unit/channel-health-checker.test.ts:80	以單一 DOM snapshot 探測一般健康狀態
-test/unit/channel-health-checker.test.ts:100	保留 login、error、offline、content warning、live 的判斷優先序
-test/unit/channel-health-checker.test.ts:138	content warning 仍用 Locator 點擊並等待 live content
-test/unit/channel-health-checker.test.ts:161	content warning 無法點擊時回報 content_warning
+test/unit/channel-health-checker.test.ts:81	以單一 DOM snapshot 探測一般健康狀態
+test/unit/channel-health-checker.test.ts:101	保留 login、error、offline、content warning、live 的判斷優先序
+test/unit/channel-health-checker.test.ts:139	一般未登入回報 login_missing，明確登入阻擋仍優先
+test/unit/channel-health-checker.test.ts:158	content warning 仍用 Locator 點擊並等待 live content
+test/unit/channel-health-checker.test.ts:181	content warning 無法點擊時回報 content_warning
 test/unit/channel-points-reader.test.ts:30	解析千分位 %s
 test/unit/channel-points-reader.test.ts:43	解析縮寫 %s
 test/unit/channel-points-reader.test.ts:49	依序檢查摘要候選值並只執行一次批次 DOM 讀取
@@ -150,23 +153,24 @@ test/unit/channel-session.test.ts:858	claim 拋錯時仍嘗試重讀餘額
 test/unit/channel-session.test.ts:908	健康檢查遇到可確認的 Twitch 內容警示時會按掉並回到 healthy
 test/unit/channel-session.test.ts:930	健康檢查遇到無法確認的 Twitch 內容警示時回報 content_warning
 test/unit/channel-session.test.ts:945	URL mismatch 與 page closed 回傳明確原因
-test/unit/channel-session.test.ts:964	第一次失敗 reload 並 recovering，下一次健康才恢復 watching
-test/unit/channel-session.test.ts:993	連續三次失敗後停止 timers、關閉 page 並進入 failed
-test/unit/channel-session.test.ts:1026	reward click_failed 只回報結果，不停止 session
-test/unit/channel-session.test.ts:1052	reward 連續失敗滿門檻時重整該頻道頁面
-test/unit/channel-session.test.ts:1111	reward 重整後再次連續失敗會要求容器重啟
-test/unit/channel-session.test.ts:1162	reward 失敗後成功或 not_found 會重置復原狀態
-test/unit/channel-session.test.ts:1222	獎勵操作前 URL 已偏離目標時不呼叫 RewardClaimer
-test/unit/channel-session.test.ts:1246	timer 工作不重入，且同一頁面的維護操作依序執行
-test/unit/channel-session.test.ts:1300	依設定定時刷新頁面並在 reload 後維持 watching
-test/unit/channel-session.test.ts:1350	重整後遇到 Twitch 內容警示時會重新按 Start Watching
-test/unit/channel-session.test.ts:1373	page_refresh_interval_seconds 為 0 時不排程定時刷新
-test/unit/channel-session.test.ts:1399	refreshNow 會手動重整頁面並送出 manual_refresh 事件
-test/unit/channel-session.test.ts:1431	stop 會 abort 進行中的 reload 並快速完成清理
-test/unit/channel-session.test.ts:1466	stop 等待無法 abort 的 page operation 超時後會強制關閉 page
-test/unit/channel-session.test.ts:1503	RewardClaimer 拋錯時轉為 click_failed 且避免 timer rejection
-test/unit/channel-session.test.ts:1537	只接受設定模組已驗證且存在於 channels 的名稱
-test/unit/channel-session.test.ts:1556	createChannelUrl 使用 URL encoding 並拒絕不合法 channel
+test/unit/channel-session.test.ts:964	登入失敗不 reload，下一次健康才恢復 watching
+test/unit/channel-session.test.ts:994	%s 不重整，仍在連續失敗門檻後關閉並通知失效
+test/unit/channel-session.test.ts:1020	連續三次失敗後停止 timers、關閉 page 並進入 failed
+test/unit/channel-session.test.ts:1053	reward click_failed 只回報結果，不停止 session
+test/unit/channel-session.test.ts:1079	reward 連續失敗滿門檻時重整該頻道頁面
+test/unit/channel-session.test.ts:1138	reward 重整後再次連續失敗會要求容器重啟
+test/unit/channel-session.test.ts:1189	reward 失敗後成功或 not_found 會重置復原狀態
+test/unit/channel-session.test.ts:1249	獎勵操作前 URL 已偏離目標時不呼叫 RewardClaimer
+test/unit/channel-session.test.ts:1273	timer 工作不重入，且同一頁面的維護操作依序執行
+test/unit/channel-session.test.ts:1327	依設定定時刷新頁面並在 reload 後維持 watching
+test/unit/channel-session.test.ts:1377	重整後遇到 Twitch 內容警示時會重新按 Start Watching
+test/unit/channel-session.test.ts:1400	page_refresh_interval_seconds 為 0 時不排程定時刷新
+test/unit/channel-session.test.ts:1426	refreshNow 會手動重整頁面並送出 manual_refresh 事件
+test/unit/channel-session.test.ts:1458	stop 會 abort 進行中的 reload 並快速完成清理
+test/unit/channel-session.test.ts:1493	stop 等待無法 abort 的 page operation 超時後會強制關閉 page
+test/unit/channel-session.test.ts:1530	RewardClaimer 拋錯時轉為 click_failed 且避免 timer rejection
+test/unit/channel-session.test.ts:1564	只接受設定模組已驗證且存在於 channels 的名稱
+test/unit/channel-session.test.ts:1583	createChannelUrl 使用 URL encoding 並拒絕不合法 channel
 test/unit/config.test.ts:31	載入合法 YAML 並將 snake_case 轉為 camelCase
 test/unit/config.test.ts:125	config.example.yml 是可直接複製使用的單檔設定範例
 test/unit/config.test.ts:152	載入自訂的頻道復原與 session 啟動冷卻設定
@@ -322,30 +326,31 @@ test/unit/session-manager.test.ts:228	依 active session 順序回報頁面重�
 test/unit/session-manager.test.ts:256	可手動重整全部或指定 active session
 test/unit/session-manager.test.ts:277	start failure 不留 registry，且不影響其他頻道啟動
 test/unit/session-manager.test.ts:301	page crash 只對該頻道 backoff，其他 active session 保持運作
-test/unit/session-manager.test.ts:340	quarantine 到期前不啟動，到期後只啟動一個 probe
-test/unit/session-manager.test.ts:371	recoverable start failure 進入 cooldown，fatal prerequisite 不計入
-test/unit/session-manager.test.ts:407	只有從 configured channels 移除時才清除 recovery state
-test/unit/session-manager.test.ts:421	session start 卡住時會 timeout 並繼續啟動後續頻道
-test/unit/session-manager.test.ts:484	啟動失敗為瀏覽器關閉時會清理舊 session 並短重試
-test/unit/session-manager.test.ts:525	啟動失敗為 Twitch 導覽逾時時會清理舊 session 並短重試
-test/unit/session-manager.test.ts:573	導覽短重試仍逾時時只在最終失敗後回報一次
-test/unit/session-manager.test.ts:607	非導覽逾時的啟動失敗不回報 navigation outcome
-test/unit/session-manager.test.ts:625	navigation outcome observer 可在 reconcile 鎖外失效 session
-test/unit/session-manager.test.ts:639	新增多個 session 時會在後續啟動前套用間隔
-test/unit/session-manager.test.ts:671	factory failure 不影響後續頻道，下一輪可重試
-test/unit/session-manager.test.ts:691	stop failure 仍移除舊 session 並繼續新增
-test/unit/session-manager.test.ts:718	截圖失敗時回傳 undefined 並記錄可診斷錯誤
-test/unit/session-manager.test.ts:749	stopAll 隔離 stop failure、清空 registry 且可重複呼叫
-test/unit/session-manager.test.ts:774	invalidate 移除並停止 session，重複呼叫無副作用且可由 reconcile 重建
-test/unit/session-manager.test.ts:798	stop failure 時 invalidate 仍移除，下一輪可重建
-test/unit/session-manager.test.ts:819	併發 reconcile 依呼叫順序序列化且不重複建立同頻道
-test/unit/session-manager.test.ts:849	stopAll 會等待先提交的 reconcile 完成後再清空
-test/unit/session-manager.test.ts:872	invalidate 會等待先提交的 reconcile 完成後移除該 session
-test/unit/session-manager.test.ts:895	單一頻道 start 卡住不會阻塞其他頻道 invalidate
-test/unit/session-manager.test.ts:925	stopAll 會取消進行中的 start 後在有限時間內完成
-test/unit/session-manager.test.ts:952	cancelStart 未解除卡住操作時 stopAll 仍會 timeout 完成
-test/unit/session-manager.test.ts:983	輸入只對完全相同字串去重，大小寫不同視為不同頻道
-test/unit/session-manager.test.ts:1003	失敗日誌遮罩敏感錯誤內容且不傳 session object
+test/unit/session-manager.test.ts:340	健康失敗逐步冷卻，重複失效不重算，其他頻道不受影響且穩定後重設
+test/unit/session-manager.test.ts:380	quarantine 到期前不啟動，到期後只啟動一個 probe
+test/unit/session-manager.test.ts:411	recoverable start failure 進入 cooldown，fatal prerequisite 不計入
+test/unit/session-manager.test.ts:447	只有從 configured channels 移除時才清除 recovery state
+test/unit/session-manager.test.ts:461	session start 卡住時會 timeout 並繼續啟動後續頻道
+test/unit/session-manager.test.ts:524	啟動失敗為瀏覽器關閉時會清理舊 session 並短重試
+test/unit/session-manager.test.ts:565	啟動失敗為 Twitch 導覽逾時時會清理舊 session 並短重試
+test/unit/session-manager.test.ts:613	導覽短重試仍逾時時只在最終失敗後回報一次
+test/unit/session-manager.test.ts:647	非導覽逾時的啟動失敗不回報 navigation outcome
+test/unit/session-manager.test.ts:665	navigation outcome observer 可在 reconcile 鎖外失效 session
+test/unit/session-manager.test.ts:679	新增多個 session 時會在後續啟動前套用間隔
+test/unit/session-manager.test.ts:711	factory failure 不影響後續頻道，下一輪可重試
+test/unit/session-manager.test.ts:731	stop failure 仍移除舊 session 並繼續新增
+test/unit/session-manager.test.ts:758	截圖失敗時回傳 undefined 並記錄可診斷錯誤
+test/unit/session-manager.test.ts:789	stopAll 隔離 stop failure、清空 registry 且可重複呼叫
+test/unit/session-manager.test.ts:814	invalidate 移除並停止 session，重複呼叫無副作用且可由 reconcile 重建
+test/unit/session-manager.test.ts:838	stop failure 時 invalidate 仍移除，下一輪可重建
+test/unit/session-manager.test.ts:859	併發 reconcile 依呼叫順序序列化且不重複建立同頻道
+test/unit/session-manager.test.ts:889	stopAll 會等待先提交的 reconcile 完成後再清空
+test/unit/session-manager.test.ts:912	invalidate 會等待先提交的 reconcile 完成後移除該 session
+test/unit/session-manager.test.ts:935	單一頻道 start 卡住不會阻塞其他頻道 invalidate
+test/unit/session-manager.test.ts:965	stopAll 會取消進行中的 start 後在有限時間內完成
+test/unit/session-manager.test.ts:992	cancelStart 未解除卡住操作時 stopAll 仍會 timeout 完成
+test/unit/session-manager.test.ts:1023	輸入只對完全相同字串去重，大小寫不同視為不同頻道
+test/unit/session-manager.test.ts:1043	失敗日誌遮罩敏感錯誤內容且不傳 session object
 test/unit/side-nav-collapser.test.ts:7	按鈕表示側欄展開時自動收合
 test/unit/side-nav-collapser.test.ts:15	aria-expanded 為 false 時不重複點擊
 test/unit/side-nav-collapser.test.ts:25	缺少按鈕時安全略過
@@ -369,23 +374,28 @@ test/unit/stream-selector.test.ts:140	重複 status 衝突時採 offline 優先�
 test/unit/stream-selector.test.ts:155	maxConcurrentStreams=%s 不是正整數時回傳空陣列
 test/unit/stream-selector.test.ts:167	不改變 configuredChannels 或 liveStatuses 輸入
 test/unit/telegram-api.test.ts:9	以 POST JSON 呼叫 getUpdates、setMyCommands 與 sendMessage
-test/unit/telegram-api.test.ts:111	網路錯誤不包含 bot token 或完整 URL
-test/unit/telegram-api.test.ts:131	API 拒絕時不轉送 Telegram description 內容
-test/unit/telegram-api.test.ts:155	無效 JSON 保留安全的 HTTP status 與錯誤分類
+test/unit/telegram-api.test.ts:111	getUpdates 的 %s 卡住時會逾時，後續可重試
+test/unit/telegram-api.test.ts:139	停止訊號會取消 getUpdates
+test/unit/telegram-api.test.ts:152	網路錯誤不包含 bot token 或完整 URL
+test/unit/telegram-api.test.ts:172	API 拒絕時不轉送 Telegram description 內容
+test/unit/telegram-api.test.ts:196	無效 JSON 保留安全的 HTTP status 與錯誤分類
 test/unit/telegram-bot.test.ts:16	啟動、處理授權指令並可停止長輪詢
-test/unit/telegram-bot.test.ts:88	忽略未授權 chat 且不執行管理指令
-test/unit/telegram-bot.test.ts:105	回覆失敗時不重複執行同一個管理指令
-test/unit/telegram-bot.test.ts:130	推送開台、離線與領點通知，忽略 not_found
-test/unit/telegram-bot.test.ts:159	poll failure 記錄安全分類、HTTP status 與 retry delay
-test/unit/telegram-bot.test.ts:188	send failure 不記錄 chat ID、endpoint 或 request body
-test/unit/telegram-bot.test.ts:213	推送 page crash、browser restart 與 container restart 通知
-test/unit/telegram-bot.test.ts:239	尚未啟動時 stop 不傳送誤導通知
-test/unit/telegram-bot.test.ts:248	沒有 active session 時截圖指令回覆提示
-test/unit/telegram-bot.test.ts:263	忠誠點數指令可查詢全部或指定頻道
-test/unit/telegram-bot.test.ts:316	沒有 active session 時忠誠點數指令回覆提示
-test/unit/telegram-bot.test.ts:329	未指定頻道時回傳所有 active session 截圖
-test/unit/telegram-bot.test.ts:363	未指定頻道截圖遇到 stale session 時會跳過並繼續回傳可用頻道
-test/unit/telegram-bot.test.ts:396	可由指令更新頻道清單與最大同時觀看
+test/unit/telegram-bot.test.ts:88	%s 卡住時仍接收下一輪 /status 並可停止
+test/unit/telegram-bot.test.ts:124	查詢逾時會回覆、保留名額，並抑制稍後完成的結果
+test/unit/telegram-bot.test.ts:180	背景查詢失敗會回覆且釋放名額
+test/unit/telegram-bot.test.ts:190	忽略未授權 chat 且不執行管理指令
+test/unit/telegram-bot.test.ts:207	回覆失敗時不重複執行同一個管理指令
+test/unit/telegram-bot.test.ts:232	推送開台、離線與領點通知，忽略 not_found
+test/unit/telegram-bot.test.ts:261	poll failure 記錄安全分類、HTTP status 與 retry delay
+test/unit/telegram-bot.test.ts:290	send failure 不記錄 chat ID、endpoint 或 request body
+test/unit/telegram-bot.test.ts:315	推送 page crash、browser restart 與 container restart 通知
+test/unit/telegram-bot.test.ts:341	尚未啟動時 stop 不傳送誤導通知
+test/unit/telegram-bot.test.ts:350	沒有 active session 時截圖指令回覆提示
+test/unit/telegram-bot.test.ts:365	忠誠點數指令可查詢全部或指定頻道
+test/unit/telegram-bot.test.ts:418	沒有 active session 時忠誠點數指令回覆提示
+test/unit/telegram-bot.test.ts:431	未指定頻道時回傳所有 active session 截圖
+test/unit/telegram-bot.test.ts:465	未指定頻道截圖遇到 stale session 時會跳過並繼續回傳可用頻道
+test/unit/telegram-bot.test.ts:498	可由指令更新頻道清單與最大同時觀看
 test/unit/twitch-api.test.ts:25	沒有初始 token 時先用 Client Secret 取得 token 再查詢
 test/unit/twitch-api.test.ts:48	有 client secret 時每小時驗證有效 token，未近到期不換發
 test/unit/twitch-api.test.ts:71	token 剩餘少於一天時自動換發後使用新 token 查詢

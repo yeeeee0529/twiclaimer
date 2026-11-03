@@ -32,6 +32,7 @@ browser_start_failed
 browser_termination_unconfirmed
 cgroup_metrics_unavailable
 cgroup_sample_failed
+channel_health_recovery_backoff
 channel_recovery_deferred
 channel_recovery_probe_started
 channel_recovery_quarantined
@@ -130,6 +131,8 @@ telegram_command_failed
 telegram_command_menu_failed
 telegram_config_update_failed
 telegram_poll_failed
+telegram_query_failed
+telegram_query_timeout
 telegram_screenshot_failed
 telegram_screenshot_sent
 telegram_send_failed
