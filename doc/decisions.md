@@ -167,3 +167,17 @@
 - 決定：照舊版原始檔還原——`first()` 只包可見性檢查用的 locator，`evaluateAll`／`nth` 用完整 options locator（+2−1 行）。
 - 理由：§0 行為依據順位 2（舊版程式碼）；e2e 是唯一能在真 CDP 層抓到該組合差異的地方。
 - 影響：`src/browser/stream_playback_optimizer.rs`；playback-optimizer e2e 1/1 綠，單元 6/6 綠。
+
+## DEC-019 Discord／twilight 介面與測試替身的差異（S4.1／S4.3）
+
+- 日期：2026-11-03（步驟：S4.1／S4.3；由 s43-discord 代理移植、主會話記錄）
+- 問題：舊版 `DiscordBot` 直接用 ws（自組 identify op 框、heartbeat 由 `DiscordBotTimer` 接縫注入、`isDiscordInteraction` 驗 payload 形狀），HTTP 用 fetch 注入以便測試；Rust 改以 twilight crate 的 `Shard` 啟動 gateway，介面形狀與舊版不完全相同。
+- 決定：
+  1. gateway 事件以 twilight typed 事件餵 bot（`next_event(EventTypeFlags::INTERACTION_CREATE)`）。畸形 payload 在舊版由 `isDiscordInteraction` 靜默丟棄，Rust 版會變成 twilight 的 Deserializing 錯誤——記 `discord_gateway_error` 後繼續收事件；欄位錯型（如 `guild_id`）也不再照舊版進 log。僅此一差。
+  2. 授權清單比對以 twilight `Id.get().to_string()` 對 config 字串集合（與舊版字串 set 語意在數值等同寫法上等價，差異僅前導零）。真實 payload 本就帶 twilight 必填欄位（`application_id`、`authorizing_integration_owners`、`entitlements`、`type` 等），測試 fixture 補實（interaction id 由 `interaction-2` 改為數字 `2`）。
+  3. 舊測試對 identify `{op:2…}`／heartbeat `{op:1,d:null}` 的 op 框斷言，由 `build_shard_config` 的設定值驗證取代（identify properties `twitch-watchdog`／`twitch-watchdog`／`std::env::consts::OS`、`Intents::empty()`、不開 cache）；`DiscordBotTimer` 接縫移除，heartbeat／resume／重連由 twilight 內部處理。斷線行為（X4 fake shard：斷→`discord_gateway_error`→持續收指令）保留同語意。
+  4. 逾時分類：舊版 `AbortSignal.timeout` 的 rejection 是 TimeoutError 而非 `DiscordApiError`；Rust 版以同一 enum 的 `Timeout` kind 呈現。無消費端觀察訊息，行為等價。
+  5. 錯誤模型：context 的鬆散 promise reject 以 `BotCommandError { message }` 表達；config 寫回錯誤以 `ConfigWriteError`（`name()` 對映舊版 `Error.name`）。
+  6. `get_gateway_bot` 回傳 `url: Option<String>`（舊版不驗 schema）；實際連線 URL 改用 twilight 預設值（§7.8 的 gateway 條目）。
+- 理由：twilight 是計畫已選定的 gateway 實作（Cargo.toml 既有依賴）；上述差異都能對回舊版在「真實 Discord payload」下的等價行為，僅 malformed payload 的 log 有差。
+- 影響：`src/discord/{api,bot}.rs`、`src/notifications/bot_command_context.rs`。其他已知取捨：twilight 內部兩處 panic 路徑（`ConfigBuilder::new` 的 TLS 載入、`InMemoryQueue::default` 需 runtime）非我方控制，start 在 runtime 內執行不受影響；`format_balance` 對 ≥1e21 照 `toString` 指數形（舊版展開十進位；點數不會到該量級，程式內已註明）；`content.slice(0,2000)` 以 Unicode 純量近似 UTF-16（僅補充字元的邊界情況理論上有差異）。DEC-013 的「使用端先行定義形狀型別」延伸至 notifications 的指令上下文型別（`WatchdogSchedulerSnapshot`／`StreamStatusChange`／`ChannelSessionRefreshStatus`／`SessionRefreshResult`／`SessionScreenshot`／`SessionChannelPointsResult` 等），統一債留到 S3.4／S3.5 落地後一併清。

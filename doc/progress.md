@@ -1,7 +1,7 @@
 # 進度
 
-- 目前狀態：**進行中（2026-11-03 恢復）**。已完成步驟：S1.1–S1.8、S2.1–S2.6、S3.1–S3.3、S1 關卡（本機可驗部分）、S2 關卡；部分完成：S1.7（**完成**：模組＋單元 19＋7＋6、e2e 17/17）、S3.4（SideNavCollapser 4/4 完成；ChannelSession／ChannelHealthChecker 進行中）。S3.5–S3.6、S4、S5 未完成。執行中的代理：s43‑discord（S4.1＋S4.3）、s34‑session（S3.4 主體）
-- 測試移植（2026-11-03 以 `scripts/port-coverage.sh` 量測）：舊清單已更新至 432 筆（唯一標題，基準改為 `d49363d`，見 DEC-016）：已處置 276、缺 156、未知標題 0；缺少的集中在 S1.7 殘餘 e2e、S3.4–S3.6、S4
+- 目前狀態：**進行中（2026-11-03 恢復）**。已完成步驟：S1.1–S1.8、S2.1–S2.6、S3.1–S3.3、S4.1、S4.3、S1 關卡（本機可驗部分）、S2 關卡；部分完成：S1.7（**完成**：模組＋單元 19＋7＋6、e2e 17/17）、S3.4（SideNavCollapser 4/4 完成；ChannelSession／ChannelHealthChecker 進行中）。S3.5–S3.6、S4.2、S4 關卡、S5 未完成。執行中的代理：s34‑session（S3.4 主體）、s42‑telegram（S4.2）
+- 測試移植（2026-11-03 以 `scripts/port-coverage.sh` 量測）：舊清單已更新至 432 筆（唯一標題，基準改為 `d49363d`，見 DEC-016）：已處置 292、缺 140、未知標題 0；缺少的集中在 S3.4 剩餘（channel‑session、health）、S3.5、S3.6（app‑runner、integration）、S4.2
 - DEC-016：使用者裁示**納入**舊版 `306b4ba`、`d49363d` 兩個 commit（基準改為 `d49363d`），重跑 `extract-spec.sh`（+10 唯一標題、log‑events +3 事件）；已完成的移植不回頭改（兩 commit 未動到已移植模組）
 - DEC-017：`Locator::evaluate` 的 undefined 回值不再視為「沒有元素」（S1.7 e2e 揭露，依 Playwright 1.62.1 實際行為修正 `src/browser/cdp/locator.rs`）；existing e2e 全綠
 - 觀察到的既有不穩定：
@@ -21,7 +21,7 @@
 | S1 | 5 天 | 7.5 天 | 2.1 | 步驟＋關卡完成（關卡為本機可驗部分；G4【人工】、G8/G9 Linux 部分留 Docker） |
 | S2 | 6 天 | 9 天 | 1.5 | 步驟＋關卡完成（`REQUIRE_E2E=1` 等價檢查＋strict 114/114） |
 | S3 | 9 天 | 13.5 天 | 0.9 | 進行中（S3.1–S3.3 完成；S3.4 部分完成；S3.5–S3.6 未開始） |
-| S4 | 4 天 | 6 天 | 0 | 進行中（S4.1／S4.3 代理執行中） |
+| S4 | 4 天 | 6 天 | 0 | 進行中（S4.1／S4.3 完成；S4.2 代理執行中） |
 | S5 | 3 天 + 24–72 小時 | 4.5 天 | 0 | 未開始 |
 
 「已用」為已完成步驟「耗時」欄的累計；S1–S3 有平行執行，與牆鐘時間不同。
@@ -54,9 +54,9 @@
 | S3.5 | 未開始 | | | | |
 | S3.6 | 未開始 | | | | |
 | S3 關卡 | 未開始 | | | | |
-| S4.1 | 進行中 | | | notifications 模組由 s43‑discord 代理移植中 | |
-| S4.2 | 未開始 | | | 以基準 `d49363d` 為行為依據（`306b4ba` 的 Telegram 修改納入）；待 notifications 介面落地後派出 | |
-| S4.3 | 進行中 | | | discord api／bot 由 s43‑discord 代理移植中；測試標題以重抽 TSV 為準 | |
+| S4.1 | 完成 | 2026-11-03 | | `src/notifications/`：`bot_notifications`（restart／crash 三則訊息文字逐字照舊，含全形標點與 emoji）＋`BotCommandContext` trait（方法照舊版形狀；scheduler／sessions 型別依 DEC‑013／DEC‑019 在使用端先行定義，統一債留 S3.4／S3.5）。由 s43‑discord 代理移植，`check.sh` 綠 | e42ab8f |
+| S4.2 | 進行中（代理執行中） | | | telegram‑api 6＋telegram‑bot 17（DEC‑016 重抽，含 `306b4ba` 的 `telegram_query_failed`／`telegram_query_timeout`）；介面對接 S4.1 的 `BotCommandContext` | |
+| S4.3 | 完成 | 2026-11-03 | | `src/discord/`：REST client（reqwest 只開 h1、不讀 proxy、10 秒逾時、`redirect error`、multipart photo、錯誤訊息逐字）＋`DefaultDiscordBot`（twilight Shard：identify properties、`Intents::empty()`、無 cache、啟停廣播訊息與 15 個指令逐字照舊）。9 個舊測試全移植（strict discord 9/9、0 未知）＋X4 fake‑shard 等 11 個新測試；twilight 介面取捨記 DEC‑019。合併後 main 全量：657 passed／46 ignored、`check.sh` 綠 | e34dbef |
 | S4 關卡 | 未開始 | | | | |
 | S5.1 | 未開始 | | | | |
 | S5.2 | 未開始 | | | | |
