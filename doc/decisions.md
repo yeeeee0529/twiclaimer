@@ -157,3 +157,13 @@
 - 決定：依 Playwright 1.62.1 實際行為修正（`$OLD/node_modules/playwright-core` bundle 的 `locator.ts`／`frames.ts`：client 端 `_withElement` 先輪詢到元素 attach，元素存在後就直接 `parseResult` 回傳，不再輪詢）。實作改為 `EVALUATE_ELEMENT_SOURCE` 回 `{ elementFound, result }`，Rust 端僅在 `elementFound === false` 時輪詢。找不到元素的逾時訊息（`locator.evaluate: Timeout Nms exceeded.`）與 `doc/spec/pw-errors.jsonl` 的 `locator-evaluate-missing` 案例維持不變，既有的 errors e2e 與 S1.5／S1.6／S1.8／S3.3 的 e2e 全部照綠。
 - 理由：§7.4 的「頁面內邏輯直接使用 Playwright 的 injected script」的精神，就是以 Playwright 實際運作為依據；「未找到元素」與「函式回傳 undefined」在原始語意中不同。
 - 影響：`src/browser/cdp/locator.rs`；本文件與計畫 §7.4 表格「等到元素存在；strict」的語意補充——之後 evaluate-with-element 一類 API 也要遵守同一語意。
+- 取捨說明：兩個並行代理各提出一種修法（輪詢改在 Rust 端顯式判斷 `elementFound`，或沿用本檔既有 `await_first`＋`{ result: … }` 包裝）。採後者：與 S1.5 既有 textContent／getAttribute／dispatchEvent 的 source 形狀一致（Playwright frames.ts 對 source 就是 `{ result: … }` 包法），程式量最小。合併後限定樹跑了全量單元與全量 e2e（46 個）全綠。
+- 債：兩個修復目前只有 e2e 涵蓋；`src/browser/cdp/locator/tests.rs` 與 `stream_playback_optimizer/tests.rs` 的單元測試尚未鎖住 evaluate－undefined 與 `first()` 組合行為，之後補。
+
+## DEC-018 `StreamPlaybackOptimizer` 的 `first()` 作用範圍抄錯（S1.7 e2e 揭露後修正）
+
+- 日期：2026-11-03（步驟：S1.7 e2e）
+- 問題：移植 e2e 後發現 `stream_playback_optimizer.rs` 把 `.first()` 直接組進 options locator 的 selector（`a >> nth=0`），導致 `evaluateAll`／`nth` 全部被限制在第一個元素；舊版 `first()` 只用於可見性檢查。實測會在 30 秒內穩定走到 `supported_quality_missing`（第一個選項通常是 Auto，使用者目標畫質永遠「不存在」），正式環境的畫質調整會靜默失效；原單元測試的 fake locator `first()` 不做 selector 組合，抓不到。
+- 決定：照舊版原始檔還原——`first()` 只包可見性檢查用的 locator，`evaluateAll`／`nth` 用完整 options locator（+2−1 行）。
+- 理由：§0 行為依據順位 2（舊版程式碼）；e2e 是唯一能在真 CDP 層抓到該組合差異的地方。
+- 影響：`src/browser/stream_playback_optimizer.rs`；playback-optimizer e2e 1/1 綠，單元 6/6 綠。

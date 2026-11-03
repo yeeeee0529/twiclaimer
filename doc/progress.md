@@ -1,6 +1,6 @@
 # 進度
 
-- 目前狀態：**進行中（2026-11-03 恢復）**。已完成步驟：S1.1–S1.6、S1.8、S2.1–S2.6、S3.1–S3.3；部分完成：S1.7（模組＋單元測試全數完成：reward‑claimer 19、channel‑points‑reader 7、stream‑playback‑optimizer 6；e2e reward‑claimer 10/10 完成）、S3.4（SideNavCollapser 4/4 完成）。S1.7 其餘 e2e（playback 1、chat‑blocking 2、channel‑points 4）與 S3.4 剩餘、S3.5–S3.6、S4、S5 未完成。執行中的代理（背景、個別 worktree 分支）：s17‑e2e‑rest（playback／chat‑blocking／channel‑points e2e）、s43‑discord（S4.1＋S4.3）、s34‑session（S3.4 ChannelSession＋health＋e2e）
+- 目前狀態：**進行中（2026-11-03 恢復）**。已完成步驟：S1.1–S1.8、S2.1–S2.6、S3.1–S3.3、S1 關卡（本機可驗部分）、S2 關卡；部分完成：S1.7（**完成**：模組＋單元 19＋7＋6、e2e 17/17）、S3.4（SideNavCollapser 4/4 完成；ChannelSession／ChannelHealthChecker 進行中）。S3.5–S3.6、S4、S5 未完成。執行中的代理：s43‑discord（S4.1＋S4.3）、s34‑session（S3.4 主體）
 - 測試移植（2026-11-03 以 `scripts/port-coverage.sh` 量測）：舊清單已更新至 432 筆（唯一標題，基準改為 `d49363d`，見 DEC-016）：已處置 276、缺 156、未知標題 0；缺少的集中在 S1.7 殘餘 e2e、S3.4–S3.6、S4
 - DEC-016：使用者裁示**納入**舊版 `306b4ba`、`d49363d` 兩個 commit（基準改為 `d49363d`），重跑 `extract-spec.sh`（+10 唯一標題、log‑events +3 事件）；已完成的移植不回頭改（兩 commit 未動到已移植模組）
 - DEC-017：`Locator::evaluate` 的 undefined 回值不再視為「沒有元素」（S1.7 e2e 揭露，依 Playwright 1.62.1 實際行為修正 `src/browser/cdp/locator.rs`）；existing e2e 全綠
@@ -18,10 +18,10 @@
 | 階段 | 估計上限 | 停止門檻 | 已用 | 狀態 |
 | --- | --- | --- | --- | --- |
 | S0 | 0.5 天 + 24 小時 | 0.75 天 | 0 | 未開始 |
-| S1 | 5 天 | 7.5 天 | 2.1 | 進行中（S1.7 未開始；其餘完成） |
-| S2 | 6 天 | 9 天 | 1.5 | 步驟完成，關卡未記錄 |
-| S3 | 9 天 | 13.5 天 | 0.8 | 進行中（S3.1–S3.3 完成；S3.4–S3.6 未開始） |
-| S4 | 4 天 | 6 天 | 0 | 未開始 |
+| S1 | 5 天 | 7.5 天 | 2.1 | 步驟＋關卡完成（關卡為本機可驗部分；G4【人工】、G8/G9 Linux 部分留 Docker） |
+| S2 | 6 天 | 9 天 | 1.5 | 步驟＋關卡完成（`REQUIRE_E2E=1` 等價檢查＋strict 114/114） |
+| S3 | 9 天 | 13.5 天 | 0.9 | 進行中（S3.1–S3.3 完成；S3.4 部分完成；S3.5–S3.6 未開始） |
+| S4 | 4 天 | 6 天 | 0 | 進行中（S4.1／S4.3 代理執行中） |
 | S5 | 3 天 + 24–72 小時 | 4.5 天 | 0 | 未開始 |
 
 「已用」為已完成步驟「耗時」欄的累計；S1–S3 有平行執行，與牆鐘時間不同。
@@ -37,26 +37,26 @@
 | S1.4 | 完成 | 2026-10-19 | 0.5 天 | context（cookies 轉換、localStorage 暫時頁、setDownloadBehavior）＋page 初始化序列＋嵌套 auto-attach（page／iframe OOPIF／worker／popup）＋資源阻擋／聊天室封鎖（init script 雜湊逐位元組）＋`goto`／`screenshot`／`close`＋**probe 子命令**（`#[path]` 掛載，DEC-014）。**G2 通過：9 組錄製 CDP 順序全部相同；diag-diff 診斷也 9 組全部相同（G3 比對工具零差異）**，並以修好的 repo 腳本（bash 3.2 相容）重跑確認。債：page.rs／context.rs／probe.rs 尚無單元測試（S1.6 補 listener 測試時一併補）；G4 的 trace 匯出仍屬【人工】 | 
 | S1.5 | 完成 | 2026-10-20 | 0.4 天 | injected script 生命週期（X8）＋locator 全套 API（count／isVisible／waitFor／getAttribute／textContent／evaluate／evaluateAll／dispatchEvent／click／hover，selector 組合照 `locator.ts`）＋click/hover 重試機制（`[0,20,100,100,500]` 間隔、checkElementStates、scrollIntoView 輪替、getContentQuads＋LayoutMetrics、hit target 攔截器、訊號屏障）＋`reload`／`mouse.move`／`evaluate(fn, arg)`＋abort 機制（`AbortError`）。**G5：pw-errors.jsonl 33/33 全過**（e2e 5.1 秒）。三個代理接力完成（前兩個 session 中斷，第四棒收尾）；期間新發現並修復：`send` 的 `is_closed()` 快速失敗、crashed session 短線路（`Target crashed ` 帶尾端空白，S1.8 待整合項 1）、`close()` crashed 時仍送 `Target.closeTarget`（待整合項 2）。積壓整合：事件泵 GraphQL 抽出已改接 `diagnostics.rs` 純函式（UTF-16 截斷語意，G3 回歸 9/9 綠）。S1.8 的 sigkill e2e 斷言依 X7 加上 `page.evaluate: ` 前綴（pw-errors.jsonl 為準） | 
 | S1.6 | 完成 | 2026-10-19 | 0.2 天 | `PlaywrightBrowserPageAdapter` 移植（`src/browser/page_adapter.rs`）：三個診斷 listener、`sanitizeBrowserUrl`／`joinSanitizedUrl`／redact／UTF-16 截斷與省略條件照舊版；**9 個舊測試全移植（port-coverage strict 9/9）**＋1 補測；e2e `browser_diagnostics`（本機 TCP 伺服器取代 `page.route`）通過且連跑 4 次穩定。extraction 照 DEC-006 重用 `diagnostics.rs` 純函式；吞錯以 `catch_unwind` 表達。債：page.rs 事件泵的內聯 GraphQL 抽出改接純函式，留到 S1.5 合併後由主會話處理；e2e 第 2 個在 S3.3 | 
-| S1.7 | 未開始 | | | | |
+| S1.7 | 完成 | 2026-11-03 | 0.15 天 | 模組＋單元（reward‑claimer 19、channel‑points‑reader 7、stream‑playback‑optimizer 6）由代理先行寫成，主會話統一（fmt／clippy／測試全綠）；e2e 17/17（reward 10、points 4、chat‑blocking 2、playback 1）兩個代理平行移植，合併後全量 e2e 46/46 綠。期間揭錯並修正：`Locator::evaluate` 的 undefined 回值誤判（DEC‑017，採 `await_first`＋`{result: …}` 包法）＋`select_quality` 的 `first()` 作用範圍抄錯（DEC‑018）。strict：S1 檔案 61/61、S2 檔案 114/114、未知 0。債：evaluate／first() 修正尚無單元測試鎖定（DEC‑017 附註） | 7cbaff1、a167a4e、5a92ddb 及兩次 e2e 合併 |
 | S1.8 | 完成（macOS 可驗部分） | 2026-10-19 | 0.1 天 | 4 個 e2e（`src/tests/multi_page.rs`）：3 頁併發＋診斷歸屬與截圖隔離、popup 收到即關（`on_popup`→`close()`，opener 不受影響）、`goto("chrome://crash")` 注入 crash（A `on_crash` 恰一次、B／C 不受影響）、SIGKILL 後 `on_disconnected` < 1 秒＋無孤兒；8 個 e2e 重跑 4 次全綠。**G9 的 RSS ≤ 40 MiB 只能在 Docker 量測**（macOS 無 `/proc`；probe `--hold 3` 已實測 exit 0）。待整合（S1.5 合併時一併處理）：crashed 頁 session 需照 Playwright `_markAsCrashed()` 短線路回 `Target crashed `；`PageShared::close()` crashed 時仍要送 `Target.closeTarget` | 
-| S1 關卡 | 未開始 | | | | |
+| S1 關卡 | 完成（本機可驗部分） | 2026-11-03 | 0.1 天 | G1 ✔（S1.3：參數逐行、`151.0.7922.34`、close／取消／drop 無孤兒）；G2 ✔ 9/9 seq 相同；G3 ✔ 9/9 diag 相同；G5 ✔ pw‑errors 33/33；G6 ✔（S1.8 e2e）；G7 ✔ 18/18；G8/G9 的 Linux 部分與 G9 RSS 量測留 Docker；**G4【人工】未做**（需使用者用 `npm run twitch:login` 匯出並跑 probe 截圖確認） | — |
 | S2.1 | 完成 | 2026-10-19 | 0.3 天 | 消毒層（13）＋ Logger 本體（11）＋ `browser-diagnostics` 純函式（`extract_graph_ql_operation_names`／`decide_*_level`／`truncate_text`，10 個舊測試；另 6 個已由 channel_url 處置）＋ `safe_logging.rs`（舊碼無專屬測試，補測 3 個）。port-coverage strict 35/35。本步驟全部完成 | 5213e0a |
 | S2.2 | 完成 | 2026-10-19 | 0.5 天 | `parse_yaml`（13/13 golden）＋`ConfigLoader`（欄位驗證順序／訊息、`${VAR}`、15 個 env 覆寫、X1 browser.engine、X2 headless）＋`model.rs`（f64 忠實 JS number、`to_json()`）＋thresholds（5）＋**9/9 config golden**（fingerprint 留 S2.6）。config.test.ts 24＋11 it.each＋thresholds 5 全移植（X2 檢查放 buildConfig 最後以守住原驗證順序）。寫回屬 S2.3 | 0ead197 |
 | S2.3 | 完成 | 2026-10-19 | 0.2 天 | 位元組範圍取代引擎（saphyr Marker 是字元索引非位元組——建字元→位元組對照表；flow/block span、隱式空值、anchor 名稱掃描、CRLF／BOM 保留）＋`YamlRuntimeConfigManager`（Mutex 串行、驗證→persist→記憶體→target）；**22/22 golden**＋4/4 舊測試。`ConfigValidationError` 已統一回 `config::errors`（暫定義從 writeback.rs 移除） | 
 | S2.4 | 完成 | 2026-10-19 | 0.1 天 | `FileCredentialValidator`＋`StorageState` 解析＋四個專用錯誤（訊息逐字）；10 個舊測試全移植（port-coverage strict 10/10）；fixture 以 `include_str!` 嵌入記憶體、不碰檔案系統；`js_trim` 照 JS 字元集 | 
 | S2.5 | 完成 | 2026-10-19 | 0.3 天 | `channel_url.rs`（18）＋選台器（16）＋復原政策（7/7）＋resource guard 政策（12/12）＋safe-logging 補測（3）全部完成；port-coverage strict 全過。config 形狀的型別（BrowserRecoveryConfig／ResourceGuardPolicyConfig 等）暫在使用端定義，等 S2.2 loader 合併後統一 | 5213e0a |
 | S2.6 | 完成 | 2026-10-19 | 0.1 天 | `create_safe_config_fingerprint`（SHA-256 hex、JSON.stringify 逐字重現：鍵序照建立順序、數字用 js_number_to_string）＋`create_runtime_startup_diagnostics`；3 個舊測試全移植（fingerprint 與舊版 TS 實作逐字相同）。golden c01/c02/c03/c05/c06 已加 fingerprint 比對（全相符）；c04/c07 錯誤案例、c08/c09 X1/X2 不比 | 
-| S2 關卡 | 未開始 | | | | |
+| S2 關卡 | 完成 | 2026-11-03 | 0.1 天 | `REQUIRE_E2E=1` 等價檢查全過（fmt、clippy `-D warnings`、cargo test 單元全綠、全量 e2e 46/46、npm test 21 passed）＋`port-coverage --strict` S2 十個檔 114/114、未知 0 | — |
 | S3.1 | 完成 | 2026-10-20 | 0.2 天 | `src/twitch/{api,live_status,errors}.rs`：Helix client＋transport trait 注入（預設 `ReqwestTransport`：HTTP/1.1、不讀 proxy 環境變數，照舊版 Node fetch；2 個整合測試用本機 ephemeral server）＋token 單飛（watch channel）＋直播狀態解析；**22 個舊測試全移植（port-coverage strict 22/22）**＋7 個直接測試；逾時用 `start_paused` 虛擬時間驗證 | 
 | S3.2 | 完成 | 2026-10-20 | 0.3 天 | `app/{cgroup,resource_monitor,restart,stall_watchdog}.rs`：**24 個舊測試全移植（port-coverage strict 24/24）**；cgroup root／時鐘／Docker client／fs 以 DI 注入（`RecoveryClock` 前例），邏輯本體在 macOS 可測、僅平台預設路徑（`/sys/fs/cgroup`、`/proc`）cfg(linux)——Docker test stage 驗證；`CgroupSnapshot`／`CgroupMemoryEvents` 依 DEC-013 從 `resource_guard.rs` 移到 `app/cgroup.rs`（resource_guard 改 re-import）。代理回報亂碼中斷、未 commit——四模組程式碼完整留存，主會話清掉 12 個機械性 clippy 錯誤後收尾 commit（`6f073c7`） | 
 | S3.3 | 完成 | 2026-10-20 | 0.3 天 | `browser/types.rs`（D12：trait 對應 `types.ts` 介面；具體型別的 impl 全在新檔，cdp／page_adapter 零改動）＋`browser/manager.rs`（生命週期、重啟退避、generation、診斷分級轉發、writeback `update_config` 接點）；**49 個舊測試全移植（port-coverage strict 49/49）**＋e2e `browser_manager_logs…`（manager 以 channel 與 generation 記錄消毒後診斷）通過；`ExclusiveQueue` 交棒時跳過已取消的等待者（排隊 future 被取消會卡隊列——真 bug 修復）。代理無回報文字但 3 個增量 commit＋主會話收尾 commit 完整留存 | 
-| S3.4 | 未開始 | | | | |
+| S3.4 | 部分完成（進行中） | | 0.1 天 | SideNavCollapser 完成：`src/browser/side_nav.rs`＋4/4 單元測試。之後以基準 `d49363d`（DEC-016）為行為依據：channel‑session 38＋e2e 8、channel‑health‑checker 5。其餘由代理執行中 | wt/s34-sidenav 合併 |
 | S3.5 | 未開始 | | | | |
 | S3.6 | 未開始 | | | | |
 | S3 關卡 | 未開始 | | | | |
-| S4.1 | 未開始 | | | | |
-| S4.2 | 未開始 | | | | |
-| S4.3 | 未開始 | | | | |
+| S4.1 | 進行中 | | | notifications 模組由 s43‑discord 代理移植中 | |
+| S4.2 | 未開始 | | | 以基準 `d49363d` 為行為依據（`306b4ba` 的 Telegram 修改納入）；待 notifications 介面落地後派出 | |
+| S4.3 | 進行中 | | | discord api／bot 由 s43‑discord 代理移植中；測試標題以重抽 TSV 為準 | |
 | S4 關卡 | 未開始 | | | | |
 | S5.1 | 未開始 | | | | |
 | S5.2 | 未開始 | | | | |
