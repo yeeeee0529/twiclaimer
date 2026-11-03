@@ -95,6 +95,7 @@ scheduler_tick_failed
 scheduler_tick_selection
 scheduler_tick_skipped
 scheduler_tick_started
+service_start_failed
 service_started
 service_stop_component_failed
 service_stop_failed
@@ -108,6 +109,7 @@ session_maintenance_skipped
 session_manual_refresh_failed
 session_navigation_outcome_observer_failed
 session_operation_aborted
+session_page_operation_drain_timeout
 session_reconcile_completed
 session_reconcile_started
 session_screenshot_failed

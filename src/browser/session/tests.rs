@@ -1747,8 +1747,8 @@ fn claim_requested_now() -> MockClaimImplementation {
     })
 }
 
-// 舊測試（channel-session.test.ts:884 的 it.each([...])('明確辨識 %s 頁面'…) —
-// `as const)` 形式超出 extract-spec 的補抓樣式，未進 TSV（DEC-010 清單外）；
+// 原測試：明確辨識 %s 頁面
+// 舊測試位於 channel-session.test.ts:888 的 it.each([...])（`as const)` 形式，DEC-020 修正 extract-spec 後已進 TSV）；
 // 案例表照抄：[loginRequired, login_required]、[error, error_page]、[offline, offline]。
 #[tokio::test(start_paused = true)]
 async fn clearly_identifies_marked_pages() {

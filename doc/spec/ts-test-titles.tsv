@@ -150,6 +150,7 @@ test/unit/channel-session.test.ts:771	hasClaimableBonus 檢查拋錯時視為不
 test/unit/channel-session.test.ts:793	被 bonus 蓋住時先領取再重讀回傳餘額
 test/unit/channel-session.test.ts:830	領取後重讀仍失敗時回傳最後一次 unavailable
 test/unit/channel-session.test.ts:858	claim 拋錯時仍嘗試重讀餘額
+test/unit/channel-session.test.ts:888	明確辨識 %s 頁面
 test/unit/channel-session.test.ts:908	健康檢查遇到可確認的 Twitch 內容警示時會按掉並回到 healthy
 test/unit/channel-session.test.ts:930	健康檢查遇到無法確認的 Twitch 內容警示時回報 content_warning
 test/unit/channel-session.test.ts:945	URL mismatch 與 page closed 回傳明確原因
