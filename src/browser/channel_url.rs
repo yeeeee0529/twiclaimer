@@ -3,9 +3,15 @@
 //! 行為對照舊版 `src/browser/browser-diagnostics.ts` 的 URL 消毒部分：只保留
 //! 正規化後的 hostname 與 pathname，username、password、port、query、fragment
 //! 一律丟棄；解析失敗時回傳有界的 redacted 佔位值，絕不 panic。
+//!
+//! DEC-006：舊版 `channel-url.ts` 本身的 `CHANNEL_PATTERN`／`createChannelUrl`／
+//! `isExpectedChannelUrl`／`stableJitter` 也在此移植（S3.4，ChannelSession 與
+//! ChannelHealthChecker 使用端）。
 #![allow(dead_code)]
 
 use url::Url;
+
+use super::cdp::context::DriverError;
 
 /// Hostname 輸出上限，超過即裁切（對應舊版 `MAX_HOST_LENGTH`）。
 pub(crate) const MAX_HOST_LENGTH: usize = 128;
@@ -192,6 +198,83 @@ fn redacted_endpoint() -> SanitizedEndpoint {
         path: String::new(),
         endpoint_category: EndpointCategory::Unknown,
     }
+}
+
+// ---------------------------------------------------------------------------
+// 舊版 `src/browser/channel-url.ts` 的其餘函式（ChannelSession／ChannelHealthChecker 使用）
+// ---------------------------------------------------------------------------
+
+/// 舊版 `CHANNEL_PATTERN` (`/^[A-Za-z0-9_]{1,25}$/u`)。
+pub(crate) fn channel_pattern(channel: &str) -> bool {
+    let bytes = channel.as_bytes();
+    (1..=25).contains(&bytes.len())
+        && bytes
+            .iter()
+            .all(|byte| byte.is_ascii_alphanumeric() || *byte == b'_')
+}
+
+/// 舊版 `createChannelUrl(channel)`：pattern 檢查失敗拋錯，其餘回 Twitch 頻道頁 URL。
+///
+/// pattern 已把 channel 限制在 `[A-Za-z0-9_]`，此字元集就是
+/// `encodeURIComponent` 的 unreserved 集合，因此 encoding 恆為原樣（保留等價）。
+pub(crate) fn create_channel_url(channel: &str) -> Result<String, DriverError> {
+    if !channel_pattern(channel) {
+        return Err(DriverError::new(
+            "Error",
+            "Channel 必須是 1 到 25 字元的英數字或底線",
+        ));
+    }
+    Ok(format!(
+        "https://www.twitch.tv/{}",
+        js_encode_uri_component(channel)
+    ))
+}
+
+/// 舊版 `isExpectedChannelUrl(currentUrl, targetUrl)`：origin（en-US 小寫）與
+/// normalize 後的 pathname 相同才算預期內。
+pub(crate) fn is_expected_channel_url(current_url: &str, target_url: &str) -> bool {
+    let Ok(current) = Url::parse(current_url) else {
+        return false;
+    };
+    let Ok(target) = Url::parse(target_url) else {
+        return false;
+    };
+    current.origin().ascii_serialization().to_lowercase()
+        == target.origin().ascii_serialization().to_lowercase()
+        && normalize_path(current.path()) == normalize_path(target.path())
+}
+
+/// 舊版 `stableJitter(value, maximumMs)`：FNV-1a 雜湊的穩定抖動毫秒數。
+///
+/// `Math.imul` 為 32 位元整數乘法，`>>> 0` 對應 u32；`character.codePointAt(0)`
+/// 對應 Rust 的 code point。`maximumMs` 在 Rust 型別下必為正整數，`<= 0` 的
+/// 分支等價於 0（輸入保證 u64）。
+pub(crate) fn stable_jitter(value: &str, maximum_ms: u64) -> u64 {
+    if maximum_ms == 0 {
+        return 0;
+    }
+    let mut hash: u32 = 2_166_136_261;
+    for character in value.chars() {
+        hash ^= u32::from(character);
+        hash = hash.wrapping_mul(16_777_619);
+    }
+    u64::from(hash) % maximum_ms
+}
+
+/// 舊版 `normalizePath(pathname)`：移除結尾的 `/+` 後 en-US 小寫，空值回 `/`。
+fn normalize_path(pathname: &str) -> String {
+    let trimmed = pathname.trim_end_matches('/');
+    let normalized = if trimmed.is_empty() { "/" } else { trimmed };
+    normalized.to_lowercase()
+}
+
+/// JS `encodeURIComponent(channel)`：pattern 保證了 channel 只含
+/// `[A-Za-z0-9_]`（`encodeURIComponent` 的 unreserved 字元集），恆為原樣。
+/// 此函式顯式表達同規則，供 pattern 更動時跟著處理其餘字元。
+fn js_encode_uri_component(channel: &str) -> String {
+    channel.replace(|character: char| {
+        !matches!(character, 'a'..='z' | 'A'..='Z' | '0'..='9' | '_' | '-' | '.' | '~')
+    }, "")
 }
 
 #[cfg(test)]

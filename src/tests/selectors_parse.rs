@@ -30,6 +30,10 @@ fn all_selectors() -> Vec<(&'static str, String)> {
             CHANNEL_HEALTH_SELECTORS.login_required.to_string(),
         ),
         (
+            "CHANNEL_HEALTH_SELECTORS.logged_out",
+            CHANNEL_HEALTH_SELECTORS.logged_out.to_string(),
+        ),
+        (
             "CHANNEL_HEALTH_SELECTORS.live_content",
             CHANNEL_HEALTH_SELECTORS.live_content.to_string(),
         ),

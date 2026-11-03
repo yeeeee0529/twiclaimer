@@ -8,10 +8,13 @@
 
 /// `ChannelHealthChecker.ts` 的 `CHANNEL_HEALTH_SELECTORS`（鍵名轉 snake_case，
 /// 字串值逐字相同）。
+///
+/// 依 DEC-016 的行為基準（舊版 `d49363d`）更新：`login_required` 不再含登入
+/// 按鈕，新增 `loggedOut` 值（一般未登入與明確登入阻擋自此分開判定）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
 pub(crate) struct ChannelHealthSelectors {
     pub(crate) login_required: &'static str,
+    pub(crate) logged_out: &'static str,
     pub(crate) live_content: &'static str,
     pub(crate) error: &'static str,
     pub(crate) offline: &'static str,
@@ -19,13 +22,12 @@ pub(crate) struct ChannelHealthSelectors {
 }
 
 /// `ChannelHealthChecker.ts` 的 `CHANNEL_HEALTH_SELECTORS`。
-#[allow(dead_code)]
 pub(crate) const CHANNEL_HEALTH_SELECTORS: ChannelHealthSelectors = ChannelHealthSelectors {
     login_required: concat!(
         "[data-test-selector=\"login-required\"], ",
-        "[data-a-target=\"login-button\"], ",
         "[data-channel-health=\"login-required\"]",
     ),
+    logged_out: "[data-a-target=\"login-button\"]",
     live_content: concat!(
         "[data-a-target=\"video-player\"], ",
         "[data-test-selector=\"video-player\"], ",
