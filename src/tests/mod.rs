@@ -4,8 +4,11 @@
 //! 純函式與本機可驗證的行為在各模組的 `tests.rs`。
 mod browser_diagnostics;
 mod browser_launch;
+mod channel_points_reader;
+mod chat_blocking;
 mod locator_core;
 mod multi_page;
+mod playback_optimizer;
 mod pointer_action;
 mod reward_claimer;
 mod selectors_parse;
