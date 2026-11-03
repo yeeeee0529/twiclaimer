@@ -168,6 +168,19 @@
 - 理由：§0 行為依據順位 2（舊版程式碼）；e2e 是唯一能在真 CDP 層抓到該組合差異的地方。
 - 影響：`src/browser/stream_playback_optimizer.rs`；playback-optimizer e2e 1/1 綠，單元 6/6 綠。
 
+## DEC-020 S3.4 主體的介面對應、舊版行為特例與 extract-spec 補抓補漏（ChannelSession／ChannelHealthChecker）
+
+- 日期：2026-11-03（步驟：S3.4 主體；s34-session 代理移植、主會話合併並記錄）
+- 問題：ChannelSession／ChannelHealthChecker 以舊版 `d49363d` 為基準（DEC-016），移植時遇到（1）依賴界面的落地方式、（2）測試標題與日誌事件清單在本輪重抽後仍有兩個形狀抓不到、（3）數處舊版行為特例需要在決策落實。
+- 決定：
+  1. session 依賴的模組都以窄介面接：`SessionBrowserManager`（僅 `createPage`／`closePage`）、`SessionRewardClaimer`、`SessionStreamPlaybackOptimizer`（舊版「可拋錯」以 `Err` 表達；`hasClaimableBonus` 沿用 reward 模組對錯誤折為 `false` 的實作）、`ChannelHealthEvaluator`（舊 `(page, url) => Promise` 的 trait 化，呼叫端 catch 折為 `health_check_error` 路徑由 Result 錯誤表達）、`SessionPage`／`SessionLocator`（`BrowserPage` 型別缺少 url／goto／evaluate。正式端 `ManagedSessionBrowserManager`／`ManagedSessionPage` 轉接既有 manager／cdp `PageShared`，測試端直接實作 fake（對應舊測試 fake））
+  2. 舊 JS 機制對應：flight promise → `FlightCell<T>`（tokio watch；`T: Clone`，故 `RewardClaimResult` 加 `Clone`）；`now: () => Date` → `SessionClock = Arc<dyn Fn() -> u64>`（epoch 毫秒，照 `ManagerClock` 前例）；`ChannelHealthReason` TS union → superset enum（含 `live`）；`lifecycleTail`／`pageOperationTail` 以 manager 的 `ExclusiveQueue` 重現
+  3. 清單補抽補漏並修正 `tools/ref/extract-spec.sh`：`明確辨識 %s 頁面`（it.each 案例表以 `] as const)('…'` 同行收尾）與 `session_page_operation_drain_timeout`／`service_start_failed`（層級字串單獨一行的多行 safeLog／事件即三元式字面）原先都抓不到。補兩個抓取形狀：`as const)(` 標題型、多行呼叫的「層級行下一行取最後一個單引號事件名」（事件經 `LOG_EVENTS.*` identifier 的自然由既有 LOG_EVENTS 抓取涵蓋）。重抽後：TSV 433→434 列（唯一 433）、log-events 152→154；代理對 `明確辨識 %s 頁面` 的暫行註解改回標準 `// 原測試：` 標題。覆蓋率主會話量測：344／433 已處置、缺 89、未知 0
+  4. 舊版行為特例照舊保留並記錄：`start()` 的 guard 把 `failed` 狀態列為 `return`（session 在 failed 後無法重啟，僅 stop 後重建；照舊碼）；`page_health_timer_failed`／`reward_timer_failed` 是舊 timer callback catch 分支的記點，Rust 版對應回呼不會 reject（不可達），事件名照舊保留、無呼叫點；`refreshNow` 手動路徑照舊把錯誤外拋（不記 `page_refresh_failed`）；`session_maintenance_completed` 的 `queuedMs`／`durationMs` 以 `std::time::Instant` 對應舊 `performance.now()` 差值（不會跟隨 paused 模擬時鐘，與舊測試的「任意數字」斷言相容）；正式 `ManagedSessionPage` 對點數讀取契約只回 `balance`（省略 `displayValue`，舊測試斷言對應為 `Available{balance:3500}`）
+  5. `CHANNEL_HEALTH_SELECTORS` 對齊 `d49363d`：`login_required` 移除登入按鈕、新增 `logged_out`，頁內 `channel-health-snapshot.js` 加 `loggedOut`（逐字照 `$OLD` dist）——DEC-016 基準的一致套用，非行為分歧
+- 理由：§0 行為依據順位（舊版原始檔優先）；清單工具的補抓是 DEC-016「以 HEAD 為行為依據、重抽清單」程序的健全化，不是新行為
+- 影響：`src/browser/{health,session}.rs`＋測試、`src/browser/channel_url.rs`（補 channel_pattern／create_channel_url／is_expected_channel_url／stable_jitter 逐字搬）、`src/tests/channel_session.rs`、`tools/ref/extract-spec.sh`、`doc/spec/*`。合併後全套：單元 745 passed／54 ignored（lib＋bin 各 +44——session 模組經 DEC-014 `#[path]` 掛載重跑）、e2e 全量 54/54、npm 21、strict（channel-session＋channel-health-checker＋e2e spec）51/51
+
 ## DEC-019 Discord／twilight 介面與測試替身的差異（S4.1／S4.3）
 
 - 日期：2026-11-03（步驟：S4.1／S4.3；由 s43-discord 代理移植、主會話記錄）

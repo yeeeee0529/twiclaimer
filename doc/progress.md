@@ -1,7 +1,7 @@
 # 進度
 
-- 目前狀態：**進行中（2026-11-03 恢復）**；使用者指示：**s34‑session 與 s42‑telegram 合併驗證後暫停，後續步驟（S3.5、S3.6、S4 關卡、S5）等指示再派**。已完成步驟：S1.1–S1.8、S2.1–S2.6、S3.1–S3.3、S4.1、S4.3、S1 關卡（本機可驗部分）、S2 關卡；部分完成：S1.7（**完成**：模組＋單元 19＋7＋6、e2e 17/17）、S3.4（SideNavCollapser 4/4 完成；ChannelSession／ChannelHealthChecker 進行中）。S3.5–S3.6、S4.2、S4 關卡、S5 未完成。執行中的代理：s34‑session（S3.4 主體）、s42‑telegram（S4.2）
-- 測試移植（2026-11-03 以 `scripts/port-coverage.sh` 量測）：舊清單已更新至 432 筆（唯一標題，基準改為 `d49363d`，見 DEC-016）：已處置 292、缺 140、未知標題 0；缺少的集中在 S3.4 剩餘（channel‑session、health）、S3.5、S3.6（app‑runner、integration）、S4.2
+- 目前狀態：**進行中（2026-11-03 恢復）**；使用者指示：**s34‑session 與 s42‑telegram 合併驗證後暫停，後續步驟（S3.5、S3.6、S4 關卡、S5）等指示再派**。已完成步驟：S1.1–S1.8、S2.1–S2.6、S3.1–S3.4、S4.1、S4.3、S1 關卡（本機可驗部分）、S2 關卡；S1.7 完成。S3.5–S3.6、S4.2、S4 關卡、S5 未完成（暫停）。執行中的代理：s42‑telegram（S4.2）
+- 測試移植（2026-11-03 以 `scripts/port-coverage.sh` 量測）：舊清單 434 列（唯一 433；基準 `d49363d`＋DEC‑020 修 extract‑spec 補抓；log‑events 154）：已處置 344、缺 89、未知標題 0；缺少的集中在 S3.5、S3.6（app‑runner、integration）、S4.2
 - DEC-016：使用者裁示**納入**舊版 `306b4ba`、`d49363d` 兩個 commit（基準改為 `d49363d`），重跑 `extract-spec.sh`（+10 唯一標題、log‑events +3 事件）；已完成的移植不回頭改（兩 commit 未動到已移植模組）
 - DEC-017：`Locator::evaluate` 的 undefined 回值不再視為「沒有元素」（S1.7 e2e 揭露，依 Playwright 1.62.1 實際行為修正 `src/browser/cdp/locator.rs`）；existing e2e 全綠
 - 觀察到的既有不穩定：
@@ -20,7 +20,7 @@
 | S0 | 0.5 天 + 24 小時 | 0.75 天 | 0 | 未開始 |
 | S1 | 5 天 | 7.5 天 | 2.1 | 步驟＋關卡完成（關卡為本機可驗部分；G4【人工】、G8/G9 Linux 部分留 Docker） |
 | S2 | 6 天 | 9 天 | 1.5 | 步驟＋關卡完成（`REQUIRE_E2E=1` 等價檢查＋strict 114/114） |
-| S3 | 9 天 | 13.5 天 | 0.9 | 進行中（S3.1–S3.3 完成；S3.4 部分完成；S3.5–S3.6 未開始） |
+| S3 | 9 天 | 13.5 天 | 0.9 | 進行中（S3.1–S3.4 完成；S3.5–S3.6 暫停待派） |
 | S4 | 4 天 | 6 天 | 0 | 進行中（S4.1／S4.3 完成；S4.2 代理執行中） |
 | S5 | 3 天 + 24–72 小時 | 4.5 天 | 0 | 未開始 |
 
@@ -50,7 +50,7 @@
 | S3.1 | 完成 | 2026-10-20 | 0.2 天 | `src/twitch/{api,live_status,errors}.rs`：Helix client＋transport trait 注入（預設 `ReqwestTransport`：HTTP/1.1、不讀 proxy 環境變數，照舊版 Node fetch；2 個整合測試用本機 ephemeral server）＋token 單飛（watch channel）＋直播狀態解析；**22 個舊測試全移植（port-coverage strict 22/22）**＋7 個直接測試；逾時用 `start_paused` 虛擬時間驗證 | 
 | S3.2 | 完成 | 2026-10-20 | 0.3 天 | `app/{cgroup,resource_monitor,restart,stall_watchdog}.rs`：**24 個舊測試全移植（port-coverage strict 24/24）**；cgroup root／時鐘／Docker client／fs 以 DI 注入（`RecoveryClock` 前例），邏輯本體在 macOS 可測、僅平台預設路徑（`/sys/fs/cgroup`、`/proc`）cfg(linux)——Docker test stage 驗證；`CgroupSnapshot`／`CgroupMemoryEvents` 依 DEC-013 從 `resource_guard.rs` 移到 `app/cgroup.rs`（resource_guard 改 re-import）。代理回報亂碼中斷、未 commit——四模組程式碼完整留存，主會話清掉 12 個機械性 clippy 錯誤後收尾 commit（`6f073c7`） | 
 | S3.3 | 完成 | 2026-10-20 | 0.3 天 | `browser/types.rs`（D12：trait 對應 `types.ts` 介面；具體型別的 impl 全在新檔，cdp／page_adapter 零改動）＋`browser/manager.rs`（生命週期、重啟退避、generation、診斷分級轉發、writeback `update_config` 接點）；**49 個舊測試全移植（port-coverage strict 49/49）**＋e2e `browser_manager_logs…`（manager 以 channel 與 generation 記錄消毒後診斷）通過；`ExclusiveQueue` 交棒時跳過已取消的等待者（排隊 future 被取消會卡隊列——真 bug 修復）。代理無回報文字但 3 個增量 commit＋主會話收尾 commit 完整留存 | 
-| S3.4 | 部分完成（進行中） | | 0.1 天 | SideNavCollapser 完成：`src/browser/side_nav.rs`＋4/4 單元測試。之後以基準 `d49363d`（DEC-016）為行為依據：channel‑session 38＋e2e 8、channel‑health‑checker 5。其餘由代理執行中 | wt/s34-sidenav 合併 |
+| S3.4 | 完成 | 2026-11-03 | 0.2 天 | SideNavCollapser 4/4（先前合併）＋ChannelHealthChecker 5＋ChannelSession 38（另 `明確辨識 %s 頁面` 由 DEC‑020 補抽＋標題轉正規 `// 原測試：`）單元、channel‑session e2e 8/8；合併後 main 全量：單元 745 passed／54 ignored（lib＋bin 各 +44，session 經 DEC‑014 掛載重編）、全量 e2e 54/54、npm test 21、strict 三檔（channel‑session／channel‑health‑checker／spec）51/51、clippy `-D warnings` 零警示。以基準 `d49363d`（DEC‑016）：`CHANNEL_HEALTH_SELECTORS` 對齊、`channel_url` 補四個函式、`ManagedSessionPage` 轉接 cdp；介面取捨與行為特例記 DEC‑020 | wt/s34‑sidenav、wt/s34‑session 合併（4bfbe47） |
 | S3.5 | 未開始 | | | | |
 | S3.6 | 未開始 | | | | |
 | S3 關卡 | 未開始 | | | | |
