@@ -7,4 +7,5 @@ mod browser_launch;
 mod locator_core;
 mod multi_page;
 mod pointer_action;
+mod reward_claimer;
 mod selectors_parse;
