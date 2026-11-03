@@ -179,7 +179,25 @@
   4. 舊版行為特例照舊保留並記錄：`start()` 的 guard 把 `failed` 狀態列為 `return`（session 在 failed 後無法重啟，僅 stop 後重建；照舊碼）；`page_health_timer_failed`／`reward_timer_failed` 是舊 timer callback catch 分支的記點，Rust 版對應回呼不會 reject（不可達），事件名照舊保留、無呼叫點；`refreshNow` 手動路徑照舊把錯誤外拋（不記 `page_refresh_failed`）；`session_maintenance_completed` 的 `queuedMs`／`durationMs` 以 `std::time::Instant` 對應舊 `performance.now()` 差值（不會跟隨 paused 模擬時鐘，與舊測試的「任意數字」斷言相容）；正式 `ManagedSessionPage` 對點數讀取契約只回 `balance`（省略 `displayValue`，舊測試斷言對應為 `Available{balance:3500}`）
   5. `CHANNEL_HEALTH_SELECTORS` 對齊 `d49363d`：`login_required` 移除登入按鈕、新增 `logged_out`，頁內 `channel-health-snapshot.js` 加 `loggedOut`（逐字照 `$OLD` dist）——DEC-016 基準的一致套用，非行為分歧
 - 理由：§0 行為依據順位（舊版原始檔優先）；清單工具的補抓是 DEC-016「以 HEAD 為行為依據、重抽清單」程序的健全化，不是新行為
+- 理由：§0 行為依據順位（舊版原始檔優先）；清單工具的補抓是 DEC-016「以 HEAD 為行為依據、重抽清單」程序的健全化，不是新行為
 - 影響：`src/browser/{health,session}.rs`＋測試、`src/browser/channel_url.rs`（補 channel_pattern／create_channel_url／is_expected_channel_url／stable_jitter 逐字搬）、`src/tests/channel_session.rs`、`tools/ref/extract-spec.sh`、`doc/spec/*`。合併後全套：單元 745 passed／54 ignored（lib＋bin 各 +44——session 模組經 DEC-014 `#[path]` 掛載重跑）、e2e 全量 54/54、npm 21、strict（channel-session＋channel-health-checker＋e2e spec）51/51
+
+## DEC-021 Telegram 的介面對應與 `306b4ba` 快查名額語意（S4.2）
+
+- 日期：2026-11-03（步驟：S4.2；s42-telegram 代理移植、主會話合併並記錄）
+- 問題：Telegram 以基準 `d49363d`（含 `306b4ba` 的查詢停頓保持回應）移植；Node 的 AbortSignal／fetch 注入與 JSON 型別層在 Rust 下的對應需要取捨。
+- 決定：
+  1. **typed result 解析差異（僅病態回應）**：舊版 `call<T>` 原樣回傳 `result`（形狀不對讓 bot 端爆 TypeError，poll catch 收 `errorClass:'Error'`）；Rust 在 `getUpdates` 把 result 解析成 `Vec<TelegramUpdate>`，失敗以 `invalid_response`（無 status）丟出 → poll 走 `telegram_poll_failed`（`TelegramApiError`）＋重試。流程等價，遠端回傳怪形狀時的 log 分類不同（`telegram_poll_failed` vs `telegram_command_failed`）
+  2. **`chat.id` 拒收**：`number | string` 以外的值舊版 `String(chat.id)` 顯示 `[object Object]`，Rust 解析端拒收（`invalid_response`）
+  3. **deadline／訊號分層**：`AbortSignal.any([signal, AbortSignal.timeout(秒數＋10s)])` → reqwest `.timeout()`（映射 `timeout` 分類、訊息 `'Telegram request timed out'`）＋caller 訊號的 `select!`（`aborted`）；`maybe_cancel` 於任務失敗且訊號已中止時偏置 abort（照舊 catch 先看 `signal.aborted`）
+  4. **請求 body 數字格式**：`JSON.stringify(25)`＝`25`，serde_json 的 f64 會輸出 `25.0`——api.rs 新增 `js_number_value`（ryu-js，格式同 `js_number_to_string`）用於 `offset`／`timeout`，測試對 body 逐位元組斷言鎖住；`js_number_value` 與 `SanitizedValue::Number` 的統一是債
+  5. **generic Error 測試 seam**：bot 測試的 `new Error('…')` 以 `TelegramApiError::generic`（`error_class:'Error'`）呈現，讓 `telegram_command_failed` 的逐欄位斷言成立；正式碼不產生此值
+  6. **截斷以 Unicode 純量近似 UTF-16**：`text.slice(0,4096)`／`caption.slice(0,1024)`——同 DEC-019 `content.slice(0,2000)` 同類取捨
+  7. **`toLocaleLowerCase('en-US')` → `to_lowercase`**（頻道比對、指令 parse）——DEC-009／DEC-019 同類
+  8. **`update_id`／`message_id`／`balance`／`maxConcurrentStreams` 皆 f64**（照 DEC-013 的 JS number 形狀）
+  9. **`306b4ba` 快查名額語意逐項照舊**：名額 `MAX_ACTIVE_QUERIES=2` 在底層頁面工作結束前保留；30 秒為「finally 的 clearTimeout」與「shutdown abort listener」兩來源解除——移植為 `shutdown.child_token()` 的 deadline token；逾時回覆一旦開始送出不再被取消（照舊）；逾時／失敗的 callback 次序（abort → `telegram_query_timeout {command}` → 未 await 的逾時回覆→ 送訊失敗記 `telegram_send_failed {retryInMs:0}`）與 `throwIfAborted()` 檢查點（points 查詢後、screenshot 各頻道前後）照舊
+- 理由：§0 行為依據順位（舊版原始檔優先）；以上差異僅出現於真實 Discord／Telegram payload 不會產生的形狀
+- 影響：`src/telegram/{api,bot}.rs`＋測試、`src/lib.rs`（一行註冊）；log 事件全取自 log-events.txt（154 版）。S3.6 接線備註：`DefaultTelegramBotOptions` 需要 `AppConfig`（`channels`／`max_concurrent_streams`／`telegram.polling_timeout_seconds`）＋`Arc<TelegramApiClient>`＋`Arc<dyn BotCommandContext>`；integration stop 的 reason 沿用 `startup_failed:<phase>` 慣例（bot 對未啟動的 stop 為 no-op，照舊）。合併後 main 全量：單元 768 passed／54 ignored、e2e 54/54、npm 21、strict telegram 23/23、覆蓋率 367／433（缺 66）
 
 ## DEC-019 Discord／twilight 介面與測試替身的差異（S4.1／S4.3）
 
