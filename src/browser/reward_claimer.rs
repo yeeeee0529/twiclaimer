@@ -530,7 +530,7 @@ mod tests {
         }
     }
 
-    #[derive(Clone)]
+    #[derive(Clone, Default)]
     struct MockElement {
         visible: bool,
         disabled: bool,
@@ -538,19 +538,6 @@ mod tests {
         class_name: Option<String>,
         descendants: Vec<MockElement>,
         click: Option<Arc<Mutex<ClickAction>>>,
-    }
-
-    impl Default for MockElement {
-        fn default() -> Self {
-            Self {
-                visible: false,
-                disabled: false,
-                aria_label: None,
-                class_name: None,
-                descendants: Vec::new(),
-                click: None,
-            }
-        }
     }
 
     impl MockElement {
