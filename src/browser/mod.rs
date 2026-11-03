@@ -7,3 +7,7 @@ pub(crate) mod page_adapter;
 pub(crate) mod safe_logging;
 pub(crate) mod selectors;
 pub(crate) mod types;
+#[rustfmt::skip]
+pub(crate) mod channel_points_reader;
+#[rustfmt::skip]
+pub(crate) mod reward_claimer;
