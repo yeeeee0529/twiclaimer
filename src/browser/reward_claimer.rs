@@ -37,7 +37,8 @@ const ISO_UTC_FORMAT: StaticFormatDescription =
 
 static REWARD_CANDIDATE_SCRIPT: OnceLock<String> = OnceLock::new();
 
-#[derive(Debug, PartialEq)]
+/// 舊版 `RewardClaimResult`（`Clone` 供 session 模組的單一 flight 共用結果使用）。
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) enum RewardClaimResult {
     Claimed {
         channel: String,

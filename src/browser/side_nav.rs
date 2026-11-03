@@ -34,16 +34,17 @@ pub(crate) enum SideNavCollapseResult {
     Failed,
 }
 
-/// 本檔使用的頁面 API（對應舊版 `Page` 用到的子集）。
+// ChannelSession（S3.4 的 session 模組）以同形 fake 走 internal 入口，故 trait
+// 與本體提升為 pub(crate)（不改行為）。頁面依賴僅涵蓋本檔用到的 API。
 #[async_trait]
-trait SideNavPage: Send + Sync {
+pub(crate) trait SideNavPage: Send + Sync {
     /// 舊版 `page.locator(selector)`；builder 不失敗，操作時才回錯。
     fn locator(&self, selector: &str) -> Arc<dyn SideNavLocator>;
 }
 
 /// 本檔使用的 locator API（對應舊版 `Locator` 用到的子集）。
 #[async_trait]
-trait SideNavLocator: Send + Sync {
+pub(crate) trait SideNavLocator: Send + Sync {
     /// 舊版 `locator.first()`。
     fn first(&self) -> Arc<dyn SideNavLocator>;
 
@@ -121,8 +122,8 @@ pub(crate) async fn collapse_side_nav(page: &dyn BrowserPage) -> SideNavCollapse
     collapse_side_nav_on_page(&CdpSideNavPage::new(shared)).await
 }
 
-/// 舊版 `collapseSideNav()` 本體。
-async fn collapse_side_nav_on_page(page: &dyn SideNavPage) -> SideNavCollapseResult {
+/// 舊版 `collapseSideNav()` 本體（session 模組以 fake Page 直接呼叫，故 pub(crate)）。
+pub(crate) async fn collapse_side_nav_on_page(page: &dyn SideNavPage) -> SideNavCollapseResult {
     let toggle = page.locator(SIDE_NAV_TOGGLE_SELECTOR).first();
     if toggle
         .wait_for(Some(SIDE_NAV_WAIT_TIMEOUT_MS))

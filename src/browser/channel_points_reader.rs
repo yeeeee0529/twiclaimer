@@ -23,8 +23,9 @@ pub(crate) enum BalanceError {
     ParseFailed,
 }
 
+/// 本檔使用的頁面 API（session 模組以 fake 直接呼叫，故 pub(crate)）。
 #[async_trait]
-trait ChannelPointsBalancePage: Send + Sync {
+pub(crate) trait ChannelPointsBalancePage: Send + Sync {
     async fn evaluate_all(&self) -> Result<Value, DriverError>;
 }
 
@@ -57,7 +58,11 @@ pub(crate) async fn read_channel_points_balance(
     read_balance_on_page(&SharedChannelPointsBalancePage { page: shared }).await
 }
 
-async fn read_balance_on_page<P: ChannelPointsBalancePage>(page: &P) -> Result<u64, BalanceError> {
+/// 舊版 `readChannelPointsBalance()` 本體（session 模組以 fake page 直接呼叫，
+/// script 與本體提升為 pub(crate)；行為不變）。
+pub(crate) async fn read_balance_on_page<P: ChannelPointsBalancePage>(
+    page: &P,
+) -> Result<u64, BalanceError> {
     let summaries = match page.evaluate_all().await {
         Ok(summaries) => parse_summary_snapshots(&summaries),
         Err(_) => return Err(BalanceError::ParseFailed),
@@ -206,7 +211,8 @@ fn balance_suffix(display_value: &str) -> Option<&'static str> {
         .find(|suffix| display_value.ends_with(suffix))
 }
 
-fn channel_points_balance_script() -> &'static str {
+/// `src/browser/js/channel-points-balance.js` 的載入（session 模組重用，pub(crate)）。
+pub(crate) fn channel_points_balance_script() -> &'static str {
     static SCRIPT: OnceLock<String> = OnceLock::new();
     SCRIPT
         .get_or_init(|| {

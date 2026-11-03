@@ -5,6 +5,7 @@
 mod browser_diagnostics;
 mod browser_launch;
 mod channel_points_reader;
+mod channel_session;
 mod chat_blocking;
 mod locator_core;
 mod multi_page;

@@ -190,8 +190,9 @@ struct Inner {
 
 /// 舊版 `runExclusive` 的 promise 尾巴：以 FIFO 佇列表達，「登記」（排隊）是
 /// 同步動作——對應 TS 的 `operationTail = new Promise(release)` 在呼叫當下
-/// 就把 critical section 接上尾巴，之後的申請只能排在後面。
-struct ExclusiveQueue {
+/// 就把 critical section 接上尾巴，之後的申請只能排在後面。session 模組重用
+/// 同一語意（`lifecycleTail`／`pageOperationTail`），故提升為 pub(crate)。
+pub(crate) struct ExclusiveQueue {
     state: Mutex<ExclusiveQueueState>,
 }
 
@@ -204,28 +205,29 @@ struct ExclusiveQueueState {
     waiters: VecDeque<tokio::sync::oneshot::Sender<()>>,
 }
 
-/// 一次 exclusive 區的佇列位置：同步登記，[`ExclusiveSlot::acquire`] 後取得鎖。
-struct ExclusiveSlot {
+/// 一次 exclusive 區的佇列位置：同步登記，[`ExclusiveSlot::acquire`] 後取得鎖
+///（session 模組重用，故 pub(crate)）。
+pub(crate) struct ExclusiveSlot {
     permit: Option<tokio::sync::oneshot::Receiver<()>>,
     queue: Arc<ExclusiveQueue>,
     /// 尚未轉移給 guard（放棄時要還位）。
     holds_position: bool,
 }
 
-/// exclusive 區的持有權；drop 時交棒或釋放。
-struct ExclusiveGuard {
+/// exclusive 區的持有權；drop 時交棒或釋放（session 模組重用，故 pub(crate)）。
+pub(crate) struct ExclusiveGuard {
     queue: Option<Arc<ExclusiveQueue>>,
 }
 
 impl ExclusiveQueue {
-    fn new() -> Arc<Self> {
+    pub(crate) fn new() -> Arc<Self> {
         Arc::new(Self {
             state: Mutex::new(ExclusiveQueueState::default()),
         })
     }
 
     /// 同步登記排隊位置（對應 TS 在呼叫當下把 release promise 接上尾巴）。
-    fn enqueue(self: &Arc<Self>) -> ExclusiveSlot {
+    pub(crate) fn enqueue(self: &Arc<Self>) -> ExclusiveSlot {
         let mut state = self
             .state
             .lock()
@@ -273,7 +275,7 @@ impl ExclusiveQueue {
 
 impl ExclusiveSlot {
     /// 取得鎖（等待佇列喚醒）；回傳的 guard drop 時交棒／釋放。
-    async fn acquire(mut self) -> ExclusiveGuard {
+    pub(crate) async fn acquire(mut self) -> ExclusiveGuard {
         if let Some(permit) = self.permit.take() {
             // 發送端消失（佇列已 drop，runtime 結束）：視為取得。
             let _ = permit.await;

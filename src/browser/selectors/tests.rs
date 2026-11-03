@@ -1,8 +1,12 @@
 //! 選擇器常數的逐字測試：與舊版 `.ts` 原文比對（防止搬移時被改寫）。
+//! `CHANNEL_HEALTH_SELECTORS` 依 DEC-016 對齊舊版 `d49363d`（`login_required`
+//! 不含登入按鈕；`loggedOut` 為新值）。
 use super::*;
 
-/// 舊版 `ChannelHealthChecker.ts` 的字串值（供逐字比對）。
-const LOGIN_REQUIRED_TS: &str = "[data-test-selector=\"login-required\"], [data-a-target=\"login-button\"], [data-channel-health=\"login-required\"]";
+/// 舊版 `ChannelHealthChecker.ts`（d49363d）的字串值（供逐字比對）。
+const LOGIN_REQUIRED_TS: &str =
+    "[data-test-selector=\"login-required\"], [data-channel-health=\"login-required\"]";
+const LOGGED_OUT_TS: &str = "[data-a-target=\"login-button\"]";
 const LIVE_CONTENT_TS: &str = "[data-a-target=\"video-player\"], [data-test-selector=\"video-player\"], [data-channel-health=\"live\"]";
 const ERROR_TS: &str = "[data-test-selector=\"error-page\"], [data-a-target=\"player-error-message\"], [data-channel-health=\"error\"]";
 const OFFLINE_TS: &str = "[data-test-selector=\"offline-page\"], [data-a-target=\"offline-channel-main-content\"], [data-channel-health=\"offline\"]";
@@ -11,6 +15,7 @@ const CONTENT_WARNING_TS: &str = "[data-a-target=\"content-classification-gate-o
 #[test]
 fn channel_health_selectors_are_verbatim() {
     assert_eq!(CHANNEL_HEALTH_SELECTORS.login_required, LOGIN_REQUIRED_TS);
+    assert_eq!(CHANNEL_HEALTH_SELECTORS.logged_out, LOGGED_OUT_TS);
     assert_eq!(CHANNEL_HEALTH_SELECTORS.live_content, LIVE_CONTENT_TS);
     assert_eq!(CHANNEL_HEALTH_SELECTORS.error, ERROR_TS);
     assert_eq!(CHANNEL_HEALTH_SELECTORS.offline, OFFLINE_TS);

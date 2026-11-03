@@ -1,5 +1,5 @@
-// 來源：$REF/dist/browser/ChannelHealthChecker.js（readChannelHealthSnapshot 內 page.evaluate 的函式）
-// 由 S1.2 逐字複製；修改前先寫 doc/decisions.md。
+// 來源：$OLD（d49363d）/dist/browser/ChannelHealthChecker.js（readChannelHealthSnapshot 內 page.evaluate 的函式）
+// 由 S1.2 逐字複製（e0e079a 基準）；S3.4 依 DEC-016 更新為 d49363d 版本（新增 loggedOut）。修改前先寫 doc/decisions.md。
 (selectors) => {
         const browserGlobal = globalThis;
         const isElementVisible = (element) => {
@@ -17,6 +17,7 @@
             .join(' ');
         return {
             loginRequired: hasVisibleElement(selectors.loginRequired),
+            loggedOut: hasVisibleElement(selectors.loggedOut),
             error: hasVisibleElement(selectors.error),
             offline: hasVisibleElement(selectors.offline),
             liveContent: hasVisibleElement(selectors.liveContent),

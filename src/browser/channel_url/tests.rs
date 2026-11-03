@@ -1,7 +1,7 @@
 //! channel_url 消毒邏輯的單元測試：逐案例對照舊版 `test/unit/browser-diagnostics.test.ts`。
 use super::{
     EndpointCategory, MAX_HOST_LENGTH, MAX_PATH_LENGTH, REDACTED_URL, SanitizedEndpoint,
-    join_sanitized_url, sanitize_browser_url,
+    create_channel_url, join_sanitized_url, sanitize_browser_url,
 };
 
 /// 對應舊版 `{ host: REDACTED_URL, path: '', endpointCategory: 'unknown' }` 的期望值。
@@ -187,4 +187,18 @@ fn joins_host_with_path_and_returns_host_only_when_path_is_empty() {
     // redacted 結果的 path 為空字串，接合後只有佔位 host。
     let redacted_endpoint = sanitize_browser_url(None);
     assert_eq!(join_sanitized_url(&redacted_endpoint), REDACTED_URL);
+}
+
+// 原測試：createChannelUrl 使用 URL encoding 並拒絕不合法 channel
+// （此測試出自 test/unit/channel-session.test.ts 的 helpers 段落；createChannelUrl
+// 移植到本模組，故測試一起放在這裡。）
+#[test]
+fn create_channel_url_uses_url_encoding_and_rejects_invalid_channel() {
+    assert_eq!(
+        create_channel_url("Valid_Channel").unwrap(),
+        "https://www.twitch.tv/Valid_Channel"
+    );
+    let error = create_channel_url("invalid/channel").unwrap_err();
+    assert_eq!(error.name, "Error");
+    assert_eq!(error.message, "Channel 必須是 1 到 25 字元的英數字或底線");
 }
