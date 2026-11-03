@@ -327,8 +327,9 @@ async fn select_quality(
     // cdp 移植的 pointer.rs 已涵蓋 Playwright 的重試與 hit-target 邏輯。
     quality_menu.click(Some(CONTROL_WAIT_TIMEOUT_MS)).await?;
 
-    let options = page.locator(QUALITY_OPTION_SELECTOR).first();
+    let options = page.locator(QUALITY_OPTION_SELECTOR);
     if options
+        .first()
         .wait_for(Some(CONTROL_WAIT_TIMEOUT_MS))
         .await
         .is_err()

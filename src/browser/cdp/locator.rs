@@ -242,7 +242,8 @@ impl Locator {
 
     /// `locator.evaluate(fn, arg)`：等到元素存在（attached、strict），在 main
     /// world 以元素為第一個參數呼叫（client `locator.ts` 的 `_withElement`；
-    /// 與 Playwright 同：函式在頁內以 `(element, arg)` 呼叫、回傳按值取回）。
+    /// 與 Playwright 同：函式在頁內以 `(element, arg)` 呼叫、回傳按值取回，
+    /// undefined 回傳值照 Playwright 語意回 Null，不再視為「沒有元素」續輪詢。
     pub(crate) async fn evaluate(
         &self,
         fn_declaration: &str,
@@ -257,8 +258,10 @@ impl Locator {
             )
             .await
             .map_err(|error| api_error("locator.evaluate", error))?;
-        // call_function_on 已解開 RemoteObject 並翻譯例外；這裡取其 value。
-        Ok(remote_value(&reply))
+        // call_function_on 已解開 RemoteObject 並翻譯例外；這裡取其 value，再拆
+        // EVALUATE_ELEMENT_SOURCE 的 `{result: …}` 包裝（undefined 時無鍵 → Null）。
+        let value = remote_value(&reply);
+        Ok(value.get("result").cloned().unwrap_or(Value::Null))
     }
 
     /// `locator.evaluateAll(fn)`：不等待；以所有元素的陣列呼叫（frames.ts 的
@@ -470,6 +473,10 @@ async fn observe_state_on(
 
 /// locator.evaluate 的元素級呼叫：等到元素存在後以 `(element, arg)` 呼叫
 /// 使用者函式（injected 在 main world 已持有元素，直接以元素呼叫）。
+/// 回傳包成 `{ result: fn(…) }`（同 Playwright frames.ts 對 source 的包法，
+/// 例如 dispatchEvent 的 `{ result: undefined }`）：頂層 undefined 只會是
+/// 「沒有元素」（決定是否續輪詢）；使用者函式回 undefined 時物件仍在，
+/// 經 returnByValue 的 JSON 序列化失去 `result` 鍵，Rust 端回 Null。
 const EVALUATE_ELEMENT_SOURCE: &str = r#"(injected, data) => {
   const parsed = injected.parseSelector(data.selector);
   const elements = injected.querySelectorAll(parsed, injected.document);
@@ -478,7 +485,7 @@ const EVALUATE_ELEMENT_SOURCE: &str = r#"(injected, data) => {
   const element = elements[0];
   if (!element) return undefined;
   const fn = injected.eval("(" + data.functionText + ")");
-  return fn(element, data.arg);
+  return { result: fn(element, data.arg) };
 }"#;
 
 #[cfg(test)]
