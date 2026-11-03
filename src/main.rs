@@ -5,6 +5,13 @@
 //! lib 是兩個 crate、`lib.rs` 不開對外 API；這裡以 `#[path]` 把模組樹直接掛進
 //! bin crate（同一批原始檔會被 lib（含測試）與 bin 各編譯一次）。
 
+/// S1.7 的 browser 模組只用 config model；不掛載整個 config 模組，
+/// 避免其測試在 bin crate 重複編譯並拉入尚未掛載的 app 模組。
+mod config {
+    #[path = "model.rs"]
+    pub mod model;
+}
+
 #[path = "logging/mod.rs"]
 mod logging;
 

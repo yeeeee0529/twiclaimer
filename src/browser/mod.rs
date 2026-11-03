@@ -7,3 +7,6 @@ pub(crate) mod page_adapter;
 pub(crate) mod safe_logging;
 pub(crate) mod selectors;
 pub(crate) mod types;
+
+pub(crate) mod chat_disabler;
+pub(crate) mod stream_playback_optimizer;

@@ -131,3 +131,13 @@
 - 理由：probe 的唯一目的（G2／G3 錄製比對）要與正式碼共用同一份實作；`#[path]` 是暫行手段，不改變 lib 的 API 形狀。
 - 影響：bin 編譯時間變長；若 lib 的模組可見性後續放寬（S3），此段跟著移除。
 - 另：`scripts/compare-traces.sh` 原用 `"$name：…"`，macOS 內建 bash 3.2 解析多 byte 變數名會誤報 unbound variable，已改 `${name}：…`（bash 3.2 相容寫法）。
+
+## DEC-015 `StreamPlaybackOptimizer` 的 force click 差異（S1.7）
+
+- 日期：2026-11-03（步驟：S1.7）
+- 問題：舊版在 quality menu 與 quality option 使用 `click({ force: true })`，會跳過部分 actionability checks；目前 Rust `Locator::click` 的 API 只有 `timeout`，沒有 force 參數。
+- 決定：先用 regular `click(Some(CONTROL_WAIT_TIMEOUT_MS))`。cdp 層的 `pointer.rs` 已實作 Playwright click 的重試、element state、捲動、動作點與 hit-target 攔截機制；先不為 force 參數擴充 locator API。若 e2e 顯示選單被覆蓋或動畫中點不到，再回頭評估 force click API。
+- 理由：保持 locator API 最小面積，並避免在現階段重複 cdp pointer 層已涵蓋的邏輯。
+- 影響：極端 UI 狀態下，quality menu／option 點擊可能比舊版更容易逾時；錯誤仍只記 `stream_quality_skipped`，不影響觀看。
+- 另：bin 的暫行掛載新增只含 `config::model` 的 `config` 模組（不掛整個 config），
+  因為 S1.7 的 browser 模組需要該型別；S3.6 接線後與 browser／logging 一起移除。
