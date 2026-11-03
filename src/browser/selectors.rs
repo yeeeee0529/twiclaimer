@@ -3,13 +3,13 @@
 //! 字串內容一律從 `twitch-watchdog-docker/src/browser/` 逐字複製，不要改寫；
 //! 需要新選擇器時同樣以舊版原文為準。
 //!
-//! 呼叫端（ChannelHealthChecker／RewardClaimer 等的 Rust 版）在 S1.7 接上，
-//! 屆時移除 allow。
-#![allow(dead_code)]
+//! 已接上的常數不再使用 `allow(dead_code)`；尚未接上的常數逐項標示，避免
+//! 模組層的 allow 把新遺漏也一併掩蓋。
 
 /// `ChannelHealthChecker.ts` 的 `CHANNEL_HEALTH_SELECTORS`（鍵名轉 snake_case，
 /// 字串值逐字相同）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub(crate) struct ChannelHealthSelectors {
     pub(crate) login_required: &'static str,
     pub(crate) live_content: &'static str,
@@ -19,6 +19,7 @@ pub(crate) struct ChannelHealthSelectors {
 }
 
 /// `ChannelHealthChecker.ts` 的 `CHANNEL_HEALTH_SELECTORS`。
+#[allow(dead_code)]
 pub(crate) const CHANNEL_HEALTH_SELECTORS: ChannelHealthSelectors = ChannelHealthSelectors {
     login_required: concat!(
         "[data-test-selector=\"login-required\"], ",
@@ -68,29 +69,36 @@ pub(crate) const REWARD_BUTTON_LIKE_SELECTOR: &str =
     "button:not([type=\"submit\"]), [role=\"button\"], input[type=\"button\"]";
 
 /// `SideNavCollapser.ts` 的 `SIDE_NAV_TOGGLE_SELECTOR`。
+#[allow(dead_code)]
 pub(crate) const SIDE_NAV_TOGGLE_SELECTOR: &str = "button[data-a-target=\"side-nav-arrow\"]";
 
 /// `SideNavCollapser.ts` 的 `SIDE_NAV_SELECTOR`。
+#[allow(dead_code)]
 pub(crate) const SIDE_NAV_SELECTOR: &str = "[data-a-target=\"side-nav-bar\"]";
 
 /// `StreamPlaybackOptimizer.ts` 的 `SETTINGS_BUTTON_SELECTOR`。
+#[allow(dead_code)]
 pub(crate) const SETTINGS_BUTTON_SELECTOR: &str =
     "button[data-a-target=\"player-settings-button\"]";
 
 /// `StreamPlaybackOptimizer.ts` 的 `QUALITY_MENU_SELECTOR`。
+#[allow(dead_code)]
 pub(crate) const QUALITY_MENU_SELECTOR: &str =
     "[data-a-target=\"player-settings-menu-item-quality\"]";
 
 /// `StreamPlaybackOptimizer.ts` 的 `QUALITY_OPTION_SELECTOR`。
+#[allow(dead_code)]
 pub(crate) const QUALITY_OPTION_SELECTOR: &str = concat!(
     "[data-a-target=\"player-settings-menu-item-quality-option\"], ",
     "[role=\"menuitemradio\"]",
 );
 
 /// 直接寫在 `StreamPlaybackOptimizer.ts` 裡的 `page.locator('video')` 選擇器。
+#[allow(dead_code)]
 pub(crate) const VIDEO_SELECTOR: &str = "video";
 
 /// 直接寫在 `StreamPlaybackOptimizer.ts` 裡的 `revealPlayerControls` 選擇器。
+#[allow(dead_code)]
 pub(crate) const VIDEO_PLAYER_SELECTOR: &str = "[data-a-target=\"video-player\"], video";
 
 #[cfg(test)]
