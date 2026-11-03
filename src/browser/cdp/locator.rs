@@ -240,25 +240,56 @@ impl Locator {
         Ok(remote_string_option(&value))
     }
 
-    /// `locator.evaluate(fn, arg)`：等到元素存在（attached、strict），在 main
-    /// world 以元素為第一個參數呼叫（client `locator.ts` 的 `_withElement`；
-    /// 與 Playwright 同：函式在頁內以 `(element, arg)` 呼叫、回傳按值取回）。
+    /// `locator.evaluate(fn, arg)`：照 client `locator.ts` 的 `_withElement` —
+    /// 先 `waitForSelector(attached, strict)` 輪詢到元素存在，之後 evaluate 的
+    /// 回值（含 undefined）直接回傳、不再輪詢（frames.ts 的 `_evalOnSelector`：
+    /// 只有解析不到元素才拋錯；函式回 undefined 不是「沒有元素」）。
     pub(crate) async fn evaluate(
         &self,
         fn_declaration: &str,
         arg: Option<Value>,
         timeout: Option<u64>,
     ) -> Result<Value, DriverError> {
-        let reply = self
-            .await_first(
-                EVALUATE_ELEMENT_SOURCE,
-                json!({"functionText": fn_declaration, "arg": arg}),
-                timeout,
-            )
-            .await
-            .map_err(|error| api_error("locator.evaluate", error))?;
-        // call_function_on 已解開 RemoteObject 並翻譯例外；這裡取其 value。
-        Ok(remote_value(&reply))
+        let value = Self::poll_with_backoff(timeout, {
+            let page = Arc::clone(&self.page);
+            let selector = self.selector.clone();
+            let declaration = fn_declaration.to_string();
+            move || {
+                let page = Arc::clone(&page);
+                let selector = selector.clone();
+                let declaration = declaration.clone();
+                let arg = arg.clone();
+                async move {
+                    let injected = page.injected();
+                    let reply = call_function_on(
+                        &page,
+                        injected,
+                        EVALUATE_ELEMENT_SOURCE,
+                        json!([{"value": {
+                            "selector": selector,
+                            "strict": true,
+                            "functionText": declaration,
+                            "arg": arg,
+                        }}]),
+                        true,
+                    )
+                    .await?;
+                    // 元素存在 → 函式已執行，回值直接收（undefined → Null）；
+                    // 沒有元素 → 照 frames.ts 繼續輪詢。
+                    let answer = remote_value(&reply);
+                    Ok(
+                        if answer.get("elementFound").and_then(Value::as_bool) == Some(true) {
+                            PollOutcome::Done(answer.get("result").cloned().unwrap_or(Value::Null))
+                        } else {
+                            PollOutcome::Continue
+                        },
+                    )
+                }
+            }
+        })
+        .await
+        .map_err(|error| api_error("locator.evaluate", error))?;
+        Ok(value)
     }
 
     /// `locator.evaluateAll(fn)`：不等待；以所有元素的陣列呼叫（frames.ts 的
@@ -468,17 +499,20 @@ async fn observe_state_on(
     Ok((count, visible))
 }
 
-/// locator.evaluate 的元素級呼叫：等到元素存在後以 `(element, arg)` 呼叫
-/// 使用者函式（injected 在 main world 已持有元素，直接以元素呼叫）。
+/// locator.evaluate 的元素級呼叫：照 client 的 `_withElement`，等到元素存在
+/// 後以 `(element, arg)` 呼叫使用者函式（injected 在 main world 已持有元素，
+/// 直接以元素呼叫）。回物件的 `elementFound` 表示元素是否存在：沒有元素時由
+/// Rust 端輪詢重試；元素存在後函式回 undefined 不視為「沒有元素」
+/// （frames.ts 的 `_evalOnSelector`：只有解析不到元素才拋錯）。
 const EVALUATE_ELEMENT_SOURCE: &str = r#"(injected, data) => {
   const parsed = injected.parseSelector(data.selector);
   const elements = injected.querySelectorAll(parsed, injected.document);
   if (data.strict && elements.length > 1)
     throw injected.strictModeViolationError(parsed, elements);
   const element = elements[0];
-  if (!element) return undefined;
+  if (!element) return { elementFound: false };
   const fn = injected.eval("(" + data.functionText + ")");
-  return fn(element, data.arg);
+  return { elementFound: true, result: fn(element, data.arg) };
 }"#;
 
 #[cfg(test)]
