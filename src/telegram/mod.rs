@@ -13,3 +13,4 @@
 //! `TelegramApi`、`DefaultTelegramBot` 等）在 Rust 端以路徑引用
 //! （`crate::telegram::api::…`／`crate::telegram::bot::…`）。
 pub(crate) mod api;
+pub(crate) mod bot;
