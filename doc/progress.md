@@ -1,6 +1,6 @@
 # 進度
 
-- 目前狀態：**進行中（2026-11-03 恢復）**。已完成步驟：S1.1–S1.8、S2.1–S2.6、S3.1–S3.3、S4.1、S4.3、S1 關卡（本機可驗部分）、S2 關卡；部分完成：S1.7（**完成**：模組＋單元 19＋7＋6、e2e 17/17）、S3.4（SideNavCollapser 4/4 完成；ChannelSession／ChannelHealthChecker 進行中）。S3.5–S3.6、S4.2、S4 關卡、S5 未完成。執行中的代理：s34‑session（S3.4 主體）、s42‑telegram（S4.2）
+- 目前狀態：**進行中（2026-11-03 恢復）**；使用者指示：**s34‑session 與 s42‑telegram 合併驗證後暫停，後續步驟（S3.5、S3.6、S4 關卡、S5）等指示再派**。已完成步驟：S1.1–S1.8、S2.1–S2.6、S3.1–S3.3、S4.1、S4.3、S1 關卡（本機可驗部分）、S2 關卡；部分完成：S1.7（**完成**：模組＋單元 19＋7＋6、e2e 17/17）、S3.4（SideNavCollapser 4/4 完成；ChannelSession／ChannelHealthChecker 進行中）。S3.5–S3.6、S4.2、S4 關卡、S5 未完成。執行中的代理：s34‑session（S3.4 主體）、s42‑telegram（S4.2）
 - 測試移植（2026-11-03 以 `scripts/port-coverage.sh` 量測）：舊清單已更新至 432 筆（唯一標題，基準改為 `d49363d`，見 DEC-016）：已處置 292、缺 140、未知標題 0；缺少的集中在 S3.4 剩餘（channel‑session、health）、S3.5、S3.6（app‑runner、integration）、S4.2
 - DEC-016：使用者裁示**納入**舊版 `306b4ba`、`d49363d` 兩個 commit（基準改為 `d49363d`），重跑 `extract-spec.sh`（+10 唯一標題、log‑events +3 事件）；已完成的移植不回頭改（兩 commit 未動到已移植模組）
 - DEC-017：`Locator::evaluate` 的 undefined 回值不再視為「沒有元素」（S1.7 e2e 揭露，依 Playwright 1.62.1 實際行為修正 `src/browser/cdp/locator.rs`）；existing e2e 全綠
