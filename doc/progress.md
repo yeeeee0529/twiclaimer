@@ -1,6 +1,6 @@
 # 進度
 
-- 目前狀態：**進行中（2026-11-04）**——S3.6 完成（前置代理中斷後由接手代理收尾、主會話合併驗證）、S3 關卡完成。已完成步驟：S1.1–S1.8、S2.1–S2.6、S3.1–S3.6、S4.1–S4.3、S1 關卡（本機可驗部分）、S2 關卡、S3 關卡、S4 關卡。S5 未開始（多為【人工】Docker 步驟，待使用者裁示）。執行中的代理：無
+- 目前狀態：**進行中（2026-11-04）**——S5.1–S5.4 完成（Docker 打包＋smoke 全綠＋文件＋strict 覆蓋率；過程發現並修正五項問題，記 DEC-026）。已完成步驟：S1.1–S1.8、S2.1–S2.6、S3.1–S3.6、S4.1–S4.3、S5.1–S5.4、S1 關卡（本機可驗部分）、S2 關卡、S3 關卡、S4 關卡。剩餘：S5.5（A/B 24 小時，【人工】，A 側基準需先補 S0.1／S0.2／S0.4／S0.6）與 S5.6（切換，【人工】）。執行中的代理：無
 - 測試移植（2026-11-04 以 `scripts/port-coverage.sh` 量測）：舊清單 434 列（唯一 433；基準 `d49363d`＋DEC‑020 修 extract‑spec 補抓；log‑events 158）：**已處置 433、缺 0、未知標題 0——全部移植完成**（`%s 時拒絕設定` 重複標題警告為 config.test.ts 既有 it.each，test‑port.md 已註記）
 - DEC-016：使用者裁示**納入**舊版 `306b4ba`、`d49363d` 兩個 commit（基準改為 `d49363d`），重跑 `extract-spec.sh`（+10 唯一標題、log‑events +3 事件）；已完成的移植不回頭改（兩 commit 未動到已移植模組）
 - DEC-017：`Locator::evaluate` 的 undefined 回值不再視為「沒有元素」（S1.7 e2e 揭露，依 Playwright 1.62.1 實際行為修正 `src/browser/cdp/locator.rs`）；existing e2e 全綠
@@ -22,7 +22,7 @@
 | S2 | 6 天 | 9 天 | 1.5 | 步驟＋關卡完成（`REQUIRE_E2E=1` 等價檢查＋strict 114/114） |
 | S3 | 9 天 | 13.5 天 | 1.4 | 步驟＋關卡完成（S3.1–S3.6；關卡：`REQUIRE_E2E=1` 等價檢查＋strict 十六檔 209/209＋release build／`--version`） |
 | S4 | 4 天 | 6 天 | 0.1 | 步驟＋關卡完成（S4.1–S4.3＋關卡：等價檢查＋strict 32/32） |
-| S5 | 3 天 + 24–72 小時 | 4.5 天 | 0 | 未開始 |
+| S5 | 3 天 + 24–72 小時 | 4.5 天 | 0.7 天 | S5.1–S5.4 完成；S5.5–S5.6【人工】待使用者 |
 
 「已用」為已完成步驟「耗時」欄的累計；S1–S3 有平行執行，與牆鐘時間不同。
 
@@ -58,12 +58,12 @@
 | S4.2 | 完成 | 2026-11-03 | | `src/telegram/`：API client（reqwest 只開 h1、無 proxy、拒導向、六分類錯誤逐字、長輪詢合成 deadline 用 `start_paused` 驗證）＋`DefaultTelegramBot`（offset 遞增 poll、退避 `min(30_000, 1000*2^(n-1))`、15 指令與授權、`306b4ba` 的 `MAX_ACTIVE_QUERIES=2` 名額＋30 秒 `telegram_query_timeout`／`telegram_query_failed` 語意逐項照舊）；6＋17 個舊測試全移植（strict 23/23、0 未知）；取捨記 DEC‑021（payload 病態形狀的分類差、`js_number_value` 等）。合併後 main 全量：單元 768 passed／54 ignored、e2e 54/54、npm 21、覆蓋率 367/433（缺 66）、`check.sh` 全綠（e2e＋npm 由主會話補跑） | f121aa0、da7f888 合併（fb01ecc） |
 | S4.3 | 完成 | 2026-11-03 | | `src/discord/`：REST client（reqwest 只開 h1、不讀 proxy、10 秒逾時、`redirect error`、multipart photo、錯誤訊息逐字）＋`DefaultDiscordBot`（twilight Shard：identify properties、`Intents::empty()`、無 cache、啟停廣播訊息與 15 個指令逐字照舊）。9 個舊測試全移植（strict discord 9/9、0 未知）＋X4 fake‑shard 等 11 個新測試；twilight 介面取捨記 DEC‑019。合併後 main 全量：657 passed／46 ignored、`check.sh` 綠 | e34dbef |
 | S4 關卡 | 完成 | 2026-11-04 | 0.1 天 | S4 步驟合併後的 main tree（含 S3.5）：`REQUIRE_E2E=1` 等價檢查全過（fmt、clippy `-D warnings`、cargo test 單元 826 passed／54 ignored、全量 e2e 54/54、npm test 21）＋`port-coverage --strict` S4 四檔（telegram‑api 6／telegram‑bot 17／discord‑api 2／discord‑bot 7）32/32、未知 0（重複標題警告為 config.test.ts 既有 it.each，test‑port.md 已註記） | 3c821e0 |
-| S5.1 | 未開始 | | | | |
-| S5.2 | 未開始 | | | | |
-| S5.3 | 未開始 | | | | |
-| S5.4 | 未開始 | | | | |
-| S5.5 | 未開始 | | | | |
-| S5.6 | 未開始 | | | | |
+| S5.1 | 完成 | 2026-11-04 | 0.2 天 | `Dockerfile`（§11.1 逐字：runtime-base／chrome／build／test／production 多階段，BuildKit cache mount）＋`.dockerignore`＋`docker-compose.yml`（§12：image `twiclaimer:local`、container_name 維持 `twitch-watchdog`、build.args APP_UID/APP_GID、強化設定照舊版）＋`seccomp_profile.json`（照舊版逐字＋2 處對齊 moby 現行預設：`faccessat2` 允許、`clone3→ENOSYS`——原檔在現行 runtime 無法啟動容器，記 DEC-026 (5)）＋`chrome/SHA256SUMS` 補 linux-arm64。驗證：`docker build --target test .`（容器內 `REQUIRE_E2E=1 scripts/check.sh` 全綠）與 production build 成功 | 本 commit |
+| S5.2 | 完成 | 2026-11-04 | 0.4 天 | `scripts/docker-smoke.sh`（§11.3 十一項 Rust 版；第 10 項以容器 ExitCode==0 代理驗證無殘留 headless shell、第 11 項輸出 `docker save \| gzip -1` 位元組數）＋smoke compose 預設 image 改 `twiclaimer:smoke`。smoke／test stage 抓出並修正：**main 無參數啟動分支缺失**（lib 新增 `run_service`＝舊版 `index.ts` `main()` 移植＋`StopNotifyingRunner`＋`kill_all_registered` 收尾＋rustls provider 安裝，記 DEC-026 (4)）、Linux-only clippy `useless_conversion`（平台 `tv_usec()` 型別差）、假瀏覽器腳本 dash 不支援 `read -d`（改 `#!/bin/bash`）、smoke 版本檢查的 CMD 覆蓋語意（記 DEC-026 (1)(2)(3)）。結果：**11 項全過**，image 大小 304,499,233 bytes；容器內單元 589 passed／53 ignored、e2e 53/53 | 本 commit |
+| S5.3 | 完成 | 2026-11-04 | 0.1 天 | 四份文件：`README.md`、`README_DEV.md`（照舊版結構與中英雙語風格改寫：快速開始、資源防護、Telegram／Discord 管理、診斷 log、開發流程、Docker 驗證）、`CHANGELOG.md`（0.1.0：X1–X9 逐項＋§12 升級／回復步驟）、`test-node/docker/README.md`（smoke 11 項說明）。文件提到的指令／路徑（npm scripts、scripts/、tools/ref/、src/ 模組）皆實查存在 | 本 commit |
+| S5.4 | 完成 | 2026-11-04 | | `scripts/port-coverage.sh --strict` 433/433、缺 0、未知標題 0（含 main 接線等 S5 期間所有程式碼變更後重跑；Docker test stage 內亦 433/433） | 本 commit |
+| S5.5 | 未開始【人工】 | | | A/B 24 小時：A 側（舊版）基準需先補 S0.1／S0.2／S0.4／S0.6；量法 §10（R1–R3） | |
+| S5.6 | 未開始【人工】 | | | 切換與 24–72 小時觀察（§12 指令；回復條件見 CHANGELOG） | |
 
 ## 階段回報
 
