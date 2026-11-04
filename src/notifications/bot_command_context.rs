@@ -17,7 +17,6 @@
 //! （S3.5 前置整併：共用型別已移至 `crate::scheduler::watchdog`、
 //! `crate::sessions::manager` 與 `crate::browser::session`，本檔以
 //! `pub(crate) use` 保持既有 import 路徑不變。）
-#![allow(dead_code)]
 
 use async_trait::async_trait;
 
@@ -38,8 +37,9 @@ pub(crate) struct BotCommandError {
 /// - `ChannelSessionRefreshStatus` → [`crate::browser::session`]（S3.4 落地的
 ///   正式型別；`seconds_until_refresh` 為 `Option<u64>`）。
 // 型別以 `pub(crate) use` 重導出，供 notifications 既有與未來的消費端沿用
-// 舊 import 路徑；部分型別目前僅由正式家位置直接使用（clippy 會標未用 import）。
-#[allow(unused_imports)]
+// 舊 import 路徑。`SchedulerChannelStatus`／`SessionChannelPointsUnavailableReason`
+// 目前的消費端只有 bot 測試（正式碼直用正式家位置），保留 allow 以維持
+// DEC-022 的路徑契約。
 pub(crate) use crate::browser::session::ChannelSessionRefreshStatus;
 #[allow(unused_imports)]
 pub(crate) use crate::scheduler::watchdog::{

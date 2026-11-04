@@ -149,7 +149,6 @@ struct FakeSessionManager {
 enum GateMode {
     OnlyFirst,
     Always,
-    Never,
 }
 
 impl Default for FakeSessionManager {
@@ -202,7 +201,6 @@ impl ReconcileSessionManager for FakeSessionManager {
         let count = self.count.fetch_add(1, Ordering::SeqCst) + 1;
         self.notify.send_replace(count);
         let blocked = match self.gate_mode {
-            GateMode::Never => false,
             GateMode::Always => true,
             GateMode::OnlyFirst => desired_channels.first().map(String::as_str) == Some("first"),
         };

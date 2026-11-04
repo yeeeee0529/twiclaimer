@@ -21,9 +21,10 @@
 //!   （對映 `operation.catch(() => undefined)` 的「不取消」語意）。
 //!
 //! 逾時事件名稱（`session_start_timeout`／`session_start_cancel_timeout`／
-//! `session_stop_timeout`／`session_stop_all_timeout`）是變數轉發（舊碼
-//! `safeLog('warn', timeoutEvent, …)`），不在 `doc/spec/log-events.txt` 的
-//! 154 個清單內，但舊測試逐字斷言，照舊版輸出（manager 模組同款前例）。
+//! `session_stop_timeout`／`session_stop_all_timeout`）經變數轉發（舊碼
+//! `safeLog('warn', timeoutEvent, …)`），原本不在 `doc/spec/log-events.txt`
+//! 清單內；S3.6 以 DEC-023 的補抓形狀重抽後已收錄（158 版），本檔的字面值
+//! 照舊版輸出不變。
 //!
 //! 對映附註：`SessionChannelPointsResult` 的 `balance` 照舊版 JS number
 //! 形狀留 f64（DEC-021）；正式端由 `ChannelSession::get_channel_points`
@@ -38,12 +39,6 @@
 //! `session_channel_points_failed`）在 Rust 端不可達——
 //! `ChannelSession::get_channel_points` 的契約不回錯（DEC-020 note 4：
 //! 頁面錯誤在 session 層就折為 unavailable 原因），本檔不再附加 catch。
-//!
-//! `#![allow(dead_code)]` 在 S3.5 保留：本檔的正式消費端要等 S3.6 的
-//! AppRunner 接線（reconcile／stopAll／invalidate 的生產端呼叫還沒有；查詢
-//! 結果型別裡只有 `SessionRefreshStatus` 尚無橋接消費端），接線後核對再收掉。
-
-#![allow(dead_code)]
 
 use std::collections::HashMap;
 use std::future::Future;
@@ -68,6 +63,7 @@ use crate::browser::types::{
 };
 use crate::logging::logger::LogLevel;
 use crate::logging::redact::SanitizedValue;
+use crate::sessions::reconcile::ReconcileSessionManager;
 use crate::sessions::recovery::{
     BeginRecoveryProbeResult, ChannelRecoveryAvailability, ChannelRecoveryPolicy,
     normalize_recovery_channel,
@@ -109,7 +105,9 @@ pub(crate) enum SessionChannelPointsUnavailableReason {
 }
 
 impl SessionChannelPointsUnavailableReason {
-    /// 舊版聯集的字面值（log 用不到，供測試與除錯）。
+    /// 舊版聯集的字面值（log 用不到；正式碼不讀，供字面值測試鎖定——
+    /// DEC-023 note 10）。
+    #[allow(dead_code)]
     pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::NotFound => "not_found",
@@ -1926,3 +1924,39 @@ fn sv_strs(values: &[String]) -> SanitizedValue {
 
 #[cfg(test)]
 mod tests;
+
+// ---------------------------------------------------------------------------
+// S3.6 接線的窄介面實作（DEC-023／DEC-024 的接線備註）
+// ---------------------------------------------------------------------------
+
+#[async_trait]
+impl ReconcileSessionManager for DefaultSessionManager {
+    /// 舊版 `reconcile(activeChannels)` 的 promise 不 reject（所有清理在
+    /// manager 內收斂）；coordinator 的 `reconcile_completed {outcome:`
+    /// `'failed'}` 與 `reconcile_submit_failed` 記點因此不可達
+    ///（照 DEC-024 note 6 的語意保留事件名）。
+    async fn reconcile(
+        &self,
+        desired_channels: &[String],
+    ) -> Result<(), crate::sessions::reconcile::ReconcileError> {
+        SessionManager::reconcile(self, desired_channels).await;
+        Ok(())
+    }
+
+    /// 舊版 `cancelPendingStarts?(reason)`（正式 SessionManager 兩者都實作）。
+    async fn cancel_pending_starts(&self, reason: &str) {
+        SessionManager::cancel_pending_starts(self, reason).await;
+    }
+}
+
+#[async_trait]
+impl crate::scheduler::watchdog::SchedulerSessionReconcile for DefaultSessionManager {
+    /// 舊版 `Pick<SessionManager, 'reconcile'>`（同 [`ReconcileSessionManager`]）。
+    async fn reconcile(
+        &self,
+        channels: &[String],
+    ) -> Result<(), crate::sessions::reconcile::ReconcileError> {
+        SessionManager::reconcile(self, channels).await;
+        Ok(())
+    }
+}

@@ -27,7 +27,8 @@ use super::redact::{SanitizedValue, redact_sensitive_data};
 pub(crate) const LOG_LEVELS: [&str; 4] = ["debug", "info", "warn", "error"];
 
 /// 舊版 `LOG_EVENTS` 的 17 個事件名稱，順序照 `Logger.ts` 的物件（port 的測試依此驗證
-/// 完整與不重複）。每個名稱都必須在 `doc/spec/log-events.txt` 的 149 個清單內（測試驗證）。
+/// 完整與不重複）。每個名稱都必須在 `doc/spec/log-events.txt` 的 158 個清單內
+/// （測試驗證；清單由 `tools/ref/extract-spec.sh` 重抽，DEC-023 補抓逾時事件）。
 pub(crate) const LOG_EVENTS: [&str; 17] = [
     "service_started",
     "config_loaded",

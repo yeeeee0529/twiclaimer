@@ -28,7 +28,19 @@ enum TestField {
 /// 記錄一次請求的欄位（event, subject, fields）。
 type RecordedRequest = (String, String, Vec<(String, TestField)>);
 
-fn capture(value: &SanitizedValue) -> TestField {
+fn capture(value: &super::ControllerFieldValue) -> TestField {
+    match value {
+        super::ControllerFieldValue::Null => TestField::Null,
+        // 捨棄形的非純量值（舊版 `sanitizeFields` 的丟棄分支）：record 記舊版
+        // 的 undefined 對映；payload 不保留（不會被 log）。
+        super::ControllerFieldValue::Droppable => TestField::Undefined,
+        super::ControllerFieldValue::Bool(value) => TestField::Bool(*value),
+        super::ControllerFieldValue::Num(value) => TestField::Number(*value),
+        super::ControllerFieldValue::Str(value) => TestField::Text(value.clone()),
+    }
+}
+
+fn capture_sanitized(value: &SanitizedValue) -> TestField {
     match value {
         SanitizedValue::Null => TestField::Null,
         SanitizedValue::Undefined => TestField::Undefined,
@@ -47,7 +59,7 @@ fn object_fields(value: &SanitizedValue) -> Vec<(String, TestField)> {
     match value {
         SanitizedValue::Object(entries) => entries
             .iter()
-            .map(|(key, value)| (key.clone(), capture(value)))
+            .map(|(key, value)| (key.clone(), capture_sanitized(value)))
             .collect(),
         other => panic!("預期欄位是物件：{other:?}"),
     }
@@ -150,7 +162,7 @@ async fn first_request_emits_event_flushes_then_exits() {
             source: "resource_guard".to_string(),
             fields: Some(vec![(
                 "memoryCurrentBytes".to_string(),
-                SanitizedValue::Number(1_000.0),
+                super::ControllerFieldValue::Num(1_000.0),
             )]),
         })
         .await;
@@ -238,18 +250,14 @@ async fn nested_fields_are_dropped() {
         .request(ContainerRestartRequest {
             reason: "x".to_string(),
             source: "y".to_string(),
+            // 舊測試的巢狀物件在 Rust 欄位居舉以 Droppable 呈現（同樣被
+            // `sanitizeFields` 的捨棄路徑丟掉；payload 與輸出無關）。
             fields: Some(vec![
                 (
                     "channel".to_string(),
-                    SanitizedValue::String("ok".to_string()),
+                    super::ControllerFieldValue::Str("ok".to_string()),
                 ),
-                (
-                    "nested".to_string(),
-                    SanitizedValue::Object(vec![(
-                        "cookie".to_string(),
-                        SanitizedValue::String("secret".to_string()),
-                    )]),
-                ),
+                ("nested".to_string(), super::ControllerFieldValue::Droppable),
             ]),
         })
         .await;
@@ -309,7 +317,7 @@ async fn notify_best_effort_and_notify_timeout_still_exits() {
             source: "browser_manager".to_string(),
             fields: Some(vec![(
                 "channel".to_string(),
-                SanitizedValue::String("first".to_string()),
+                super::ControllerFieldValue::Str("first".to_string()),
             )]),
         })
         .await;

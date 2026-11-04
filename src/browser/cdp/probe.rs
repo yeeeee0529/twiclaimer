@@ -14,10 +14,6 @@
 //! listener 單元測試在 S1.6 進行。
 //!
 //! CDP 紀錄沿用 launcher 的 `TWICLAIMER_CDP_TRACE`（§7.3.7）；未設定時無額外成本。
-//!
-//! 以下 API 的呼叫端在 bin crate（`src/main.rs` 以 `#[path]` 掛入模組樹）；
-//! lib crate 的測試建構不會用到，allow 只為此存在。
-#![allow(dead_code)]
 
 use std::io::Write as _;
 use std::path::{Path, PathBuf};

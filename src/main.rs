@@ -1,25 +1,8 @@
 //! twiclaimer CLI（§4.2）：`--version` 與開發用 `probe` 子命令（§7.3.7），
 //! 正式服務的啟動在後續步驟加入。
 //!
-//! probe 需要使用 crate 內部的型別（`browser::cdp` 全是 `pub(crate)`），而 bin 與
-//! lib 是兩個 crate、`lib.rs` 不開對外 API；這裡以 `#[path]` 把模組樹直接掛進
-//! bin crate（同一批原始檔會被 lib（含測試）與 bin 各編譯一次）。
-
-/// S1.7 的 browser 模組只用 config model；不掛載整個 config 模組，
-/// 避免其測試在 bin crate 重複編譯並拉入尚未掛載的 app 模組。
-mod config {
-    #[path = "model.rs"]
-    pub mod model;
-}
-
-#[path = "logging/mod.rs"]
-mod logging;
-
-#[path = "browser/mod.rs"]
-mod browser;
-
-/// probe 的進入點（實作在 `src/browser/cdp/probe.rs`，§7.3.7）。
-use browser::cdp::probe;
+//! probe 經 lib 的公開 API（`twiclaimer::run_probe`）呼叫（DEC-014 收尾：
+//! 舊版以 `#[path]` 把模組樹掛進 bin crate，S3.6 接線後移除）。
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -46,7 +29,7 @@ fn run_probe(args: &[String]) -> Result<(), String> {
         .enable_all()
         .build()
         .map_err(|error| format!("probe: cannot start the async runtime: {error}"))?
-        .block_on(probe::run(args))
+        .block_on(twiclaimer::run_probe(args))
 }
 
 /// 用法說明（stdout；錯誤訊息走 stderr）。

@@ -342,15 +342,6 @@ struct FakeSessionReconciler {
 }
 
 impl FakeSessionReconciler {
-    fn new() -> Arc<Self> {
-        Arc::new(Self {
-            calls: Arc::default(),
-            notify: Arc::new(watch::channel(0u64).0),
-            count: Arc::default(),
-            stuck_gate: None,
-        })
-    }
-
     /// 舊測試 8 的形：reconcile 永遠卡在閘門（release 才放行）。
     fn stuck() -> Arc<Self> {
         Arc::new(Self {
@@ -504,8 +495,6 @@ struct HarnessOptions {
     now_override_ms: Option<i64>,
     /// `Some`：注入 fake timer（對應 options.timer）。
     timer: Option<Arc<FakeSchedulerTimer>>,
-    /// `Some`：注入 observer（對應 options.onStreamStatusChanged）。
-    observer: Option<Arc<RecordingObserver>>,
 }
 
 impl Default for HarnessOptions {
@@ -516,7 +505,6 @@ impl Default for HarnessOptions {
             max_concurrent_streams: 1.0,
             now_override_ms: None,
             timer: None,
-            observer: None,
         }
     }
 }
@@ -527,7 +515,6 @@ struct Harness {
     selector: Arc<RecordingSelector>,
     observer: Arc<RecordingObserver>,
     logger: Arc<FakeWatchdogLogger>,
-    timer: Option<Arc<FakeSchedulerTimer>>,
     /// 可寫入的時鐘（測試 6 以 store 切換；其余僅供端証）。
     clock: Option<Arc<AtomicI64>>,
     scheduler: DefaultWatchdogScheduler,
@@ -592,7 +579,6 @@ fn create_harness(options: HarnessOptions) -> Harness {
         selector,
         observer,
         logger,
-        timer: options.timer,
         clock: Some(fixed_clock),
         scheduler,
     }

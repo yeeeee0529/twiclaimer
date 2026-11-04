@@ -158,7 +158,9 @@ impl RewardClaimerLogger for NoopLogger {
     }
 }
 
-struct SystemRewardClock;
+/// 舊版預設 `resolveClock(options.clock)` 的來源（`() => new Date()`）：系統
+/// 毫秒時鐘。createApplication 接線（S3.6）與預設 options 使用。
+pub(crate) struct SystemRewardClock;
 
 impl RewardClaimerClock for SystemRewardClock {
     fn now_unix_millis(&self) -> u64 {

@@ -30,7 +30,6 @@
 //! 補充：[`ReconcileError`] 以 `message` 承載舊版 promise rejection 的
 //! `Error.message`；記點時再經 [`redact_sensitive_string`]
 //! （`safeErrorMessage` 的移植；照 `browser/safe_logging` 前例）。
-#![allow(dead_code)]
 
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex as StdMutex, MutexGuard};
@@ -56,15 +55,6 @@ pub(crate) type ReconcileClock = Arc<dyn Fn() -> u64 + Send + Sync>;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ReconcileError {
     pub(crate) message: String,
-}
-
-impl ReconcileError {
-    /// 組一筆對應舊版 `Error(message)` 的值。
-    pub(crate) fn new(message: impl Into<String>) -> Self {
-        Self {
-            message: message.into(),
-        }
-    }
 }
 
 impl core::fmt::Display for ReconcileError {
@@ -119,7 +109,9 @@ pub(crate) trait ReconcileCoordinator: Send + Sync {
     /// 舊版 `stop(reason)`：有限時間等待 worker 與取消完成，逾時不回報錯誤。
     async fn stop(&self, reason: &str);
 
-    /// 舊版 `waitForIdle()`：等 worker flight 清空。
+    /// 舊版 `waitForIdle()`：等 worker flight 清空。正式碼不等待 idle
+    ///（舊版也只有測試呼叫）；保留為 API 對齊與測試觀測面。
+    #[allow(dead_code)]
     async fn wait_for_idle(&self);
 }
 
@@ -272,7 +264,8 @@ impl DefaultReconcileCoordinator {
         start_worker(&self.0);
     }
 
-    /// 對應舊版 `waitForIdle`。
+    /// 對應舊版 `waitForIdle`（正式碼不呼叫；見 trait 的註記）。
+    #[allow(dead_code)]
     async fn wait_for_idle(&self) {
         while let Some(flight) = flight_snapshot(&self.0.worker_flight) {
             flight.wait().await;

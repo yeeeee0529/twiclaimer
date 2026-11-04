@@ -45,7 +45,7 @@ use super::resource_guard::{
     GuardClock, ResourceGuardDecision, ResourceGuardPolicy, ResourceGuardPolicyConfig,
     ResourceGuardPolicyOptions,
 };
-use super::restart::ContainerRestartNotifyObserver;
+use super::restart::{ContainerRestartNotifyObserver, ControllerFieldValue};
 use crate::config::model::{ResourceGuardConfig, ResourceGuardEffectiveThresholds};
 use crate::config::thresholds::{
     MAX_SAFE_INTEGER, clamp_effective_thresholds_to_memory_max, serializable_byte_count,
@@ -829,16 +829,15 @@ impl Inner {
         );
 
         let handler = self.on_container_restart_requested.clone()?;
-        // 欄位與 request 都移進 handler 的未來；本函式不留 `SanitizedValue`
-        // 的 await（`Shared` 變體不是 Send，會讓外派的 recycle worker 失去
-        // Send bound）。
+        // 欄位與 request 都移進 handler 的未來；request 欄位已封閉為 Send 的
+        // [`ControllerFieldValue`]（生產端只產字串／數字／null；非純量照
+        // 舊版 `sanitizeFields` 落入捨棄形，輸出可觀察的行為相同）。
         Some((handler)(ContainerRestartRequest {
             reason: reason.to_string(),
             source: "resource_guard".to_string(),
-            fields: Some(fields),
+            fields: Some(restart_fields_from_log(&fields)),
         }))
     }
-
     /// 對應舊版私有 `recordSnapshot`：Node 的 process 指標由
     /// [`ProcessMetricsSource`] 提供（heapUsed／external 為 null，X5）。
     fn record_snapshot(&self, state: &MonitorState, cgroup: Option<CgroupSnapshot>) {
@@ -1054,3 +1053,14 @@ fn monotonic_now_ms() -> u64 {
 
 #[cfg(test)]
 mod tests;
+
+/// request 欄位與記點欄位同值（舊版同一物件）：純量值直接轉
+/// [`ControllerFieldValue`]（本檔的生產端只產字串／數字／null）。
+fn restart_fields_from_log(
+    fields: &[(String, SanitizedValue)],
+) -> Vec<(String, ControllerFieldValue)> {
+    fields
+        .iter()
+        .map(|(name, value)| (name.clone(), ControllerFieldValue::from_sanitized(value)))
+        .collect()
+}
