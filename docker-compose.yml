@@ -1,0 +1,42 @@
+name: twitch-watchdog
+
+services:
+  twitch-watchdog:
+    build:
+      context: .
+      target: production
+      args:
+        - APP_UID
+        - APP_GID
+    image: twiclaimer:local
+    container_name: twitch-watchdog
+    init: true
+    restart: unless-stopped
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "5"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=./seccomp_profile.json
+    environment:
+      CONFIG_PATH: /app/config.yml
+    volumes:
+      - type: bind
+        source: ./config.yml
+        target: /app/config.yml
+      - type: bind
+        source: ./data/browser-state
+        target: /data/browser-state
+        read_only: true
+    shm_size: "1gb"
+    # Baseline for about 3 concurrent streams on a typical 16 GiB host.
+    # Raise mem_limit/memswap_limit when max_concurrent_streams is higher (e.g. 5 → 10g/11g).
+    mem_limit: "6g"
+    memswap_limit: "7g"
+    pids_limit: 512
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+    stop_grace_period: 40s

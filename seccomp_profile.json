@@ -51,6 +51,14 @@
 	],
 	"syscalls": [
 		{
+			"comment": "Deny clone3 with ENOSYS so runtimes fall back to clone (same as Docker's default profile); without this, thread creation fails with EPERM under the default ERRNO action",
+			"names": [
+				"clone3"
+			],
+			"action": "SCMP_ACT_ERRNO",
+			"errnoRet": 38
+		},
+		{
 			"comment": "Allow create user namespaces",
 			"names": [
 				"clone",
@@ -106,6 +114,7 @@
 				"exit",
 				"exit_group",
 				"faccessat",
+				"faccessat2",
 				"fadvise64",
 				"fadvise64_64",
 				"fallocate",

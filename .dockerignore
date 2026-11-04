@@ -1,0 +1,10 @@
+target
+.cache
+node_modules
+.git
+config.yml
+.env
+data
+s0-logs*.jsonl
+ab-logs*.jsonl
+doc/spec/traces/*.pw.log
