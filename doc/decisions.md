@@ -259,3 +259,16 @@
   10. **fire-and-forget 提交**（無 coordinator 的 `submitReconcile`）：`tokio::spawn`＋錯誤捕獲記 `reconcile_submit_failed {error}`；單元測試的同步前綴（舊 `vi` mock 靠 promise）改以 watch 通知驅動不等真實時間
 - 理由：§0 行為依據順位（舊版原始檔優先）；每項對應都能攤平到「真實 runtime」的等價行為，僅記點層 retaining 舊事件名（照既有不可達記點前例）。
 - 影響：`src/sessions/reconcile.rs`（514 行；2 個舊測試移植，paused-time shutdown）＋`src/scheduler/watchdog.rs`（25 行 placeholder → 1081 行；`it.each` 模板 2 個展開為 3＋2 案例，合計 16 個舊測試移植＋2 個接縫測試）＋`{sessions,scheduler}/mod.rs` 註冊。strict 三檔 49/49 未知 0（watchdog 13 個標題與 TSV 第 422–434 列逐字一致、reconcile 2 個第 265–266 列一致）。S3.6 接線備註：`TwitchApiClient` 經 blanket impl 直接餵 `SchedulerLiveStatusProvider`（傳具體型別的 `Arc<…>`）；SessionManager 需同時實作 `ReconcileSessionManager`／`SchedulerSessionReconcile`；coordinator 以 `Arc<dyn ReconcileCoordinator>` 持有（`SchedulerReconcileRequest` 已備 trait 物件轉接）；bots 的 `notifyStreamStatus` 實作 `StreamStatusObserver` 轉接；接線後收掉兩檔 module 級 `#![allow(dead_code)]`。債：`scheduler/selector.rs` 的 S2.5 最小 `ChannelLiveStatus` 依其檔內註記待 S3.1 後續清理（watchdog 以 `as_selector_statuses` 逐欄轉接）
+
+## DEC-025 S3.6 接線取捨：X6 以 panic hook 對應、probe 改走 lib 公開 API、逾時事件名補抽（S3.6）
+
+- 日期：2026-11-04（步驟：S3.6；前置代理中斷後由接手代理收尾、主會話合併並記錄）
+- 問題：`AppRunner`／`createApplication`／`installProcessHandlers`（§7.9）接線與三個 integration 測試檔移植；X6（Node `unhandledRejection`）在 Rust 無直接對應；DEC-014 的 bin `#[path]` 暫行掛載依約在本步驟收掉；DEC-023 已知的 4 個逾時事件名要補進 log-events。
+- 決定：
+  1. **X6（`未處理 rejection 設定 exitCode、記錄安全錯誤並停止服務`）**：Rust 對應機制為 panic hook——記安全錯誤、觸發 stop、以 exit code 收場；單元測試以 `catch_unwind` 驗證 hook 行為。`request_stop` 以 `Handle::try_current()` 守衛：panic hook 可能在無 tokio runtime 的執行緒觸發，直接 `tokio::spawn` 會 panic 讓整個測試程序 SIGABRT。
+  2. **DEC-014 收尾**：`src/main.rs` 移除 `#[path]` 掛載（logging／browser／config::model），probe 子命令改呼叫 `src/lib.rs` 新增的公開 API `pub async fn run_probe`；bin 不再重複編譯 lib 模組。全量測試數由 826 passed／54 ignored（lib＋bin 重複合計）變為 589 passed／53 ignored（僅 lib 本體）——減少的都是 bin 重複跑的同一批測試，`#[ignore]` 屬性數合併前後相同（57 行含 2 行註解），e2e 零增減。
+  3. **log-events 154→158**：補 `session_start_timeout`／`session_start_cancel_timeout`／`session_stop_timeout`／`session_stop_all_timeout`（舊碼以變數轉發、extract-spec 原抓不到）；`tools/ref/extract-spec.sh` 加 `withSessionOperationTimeout` 窗口抓取規則；重抽後 `ts-test-titles.tsv` 434 列零變化。
+  4. **browser_invalidation 測試 fidelity 修正**：`test_config()` 的 `resource_guard.enabled` 照舊版 helper（`test/helpers/test-config.ts`）預設 `true`；effective 閾值改以 `compute_effective_resource_guard_thresholds(&anchors, 3.0)` 計算（原 hardcoded 值實為 N=2 的縮放結果，與 `maxConcurrentStreams: 3` 不一致）；並補上遺漏的 `first_page.emit_crash()`（舊測試第 908 行註解後的呼叫）。
+  5. **接線債清償**：DEC-022／023／024 留下的 module 級 `#![allow(dead_code)]` 全數收回；保留的區域性 allow 逐處註明原因（接縫觀測面）。
+- 理由：§0 行為依據順位（舊版原始檔優先）；panic hook 是 Rust 程序層對「未處理 rejection → 記錄並停止服務」的最接近機制；`#[path]` 移除是 DEC-014 既定的收尾條件。
+- 影響：`src/app/{runner,create,process}.rs`＋各自 tests、`src/tests/{watchdog_flow,browser_invalidation,startup_prerequisites}.rs`、`src/{main,lib}.rs`、`tools/ref/extract-spec.sh`、`doc/spec/log-events.txt`。合併後 main 全量：單元 589 passed／53 ignored、e2e（`--ignored` 全跑）53/53、npm 21、覆蓋率 433/433（缺 0、未知 0）、S3 strict 十六檔 209/209、clippy `-D warnings` 零警示、release build 後 `twiclaimer --version` = 0.1.0。
