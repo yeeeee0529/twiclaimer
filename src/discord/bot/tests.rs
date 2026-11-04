@@ -466,7 +466,7 @@ impl BotCommandContext for FakeCommandContext {
             channel: "first".to_string(),
             enabled: true,
             next_refresh_at: Some(FIXED_NEXT_REFRESH.to_string()),
-            seconds_until_refresh: Some(4.0),
+            seconds_until_refresh: Some(4),
         }]
     }
 
@@ -540,7 +540,6 @@ impl BotCommandContext for FakeCommandContext {
             .map(|channel| SessionChannelPointsResult::Available {
                 channel,
                 balance: 1_000.0,
-                display_value: "1K".to_string(),
             })
             .collect())
     }
@@ -1353,7 +1352,6 @@ async fn points_command_defers_and_formats_all_channel_results() {
         SessionChannelPointsResult::Available {
             channel: "first".to_string(),
             balance: 1_234_567.0,
-            display_value: "1.23M".to_string(),
         },
         SessionChannelPointsResult::Unavailable {
             channel: "second".to_string(),

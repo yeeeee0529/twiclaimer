@@ -1155,7 +1155,7 @@ impl BotCore {
                         "{}. {}：{}後（下次：{}）",
                         index + 1,
                         status.channel,
-                        format_duration(*seconds_until_refresh),
+                        format_duration((*seconds_until_refresh) as f64),
                         next_refresh_at
                     )
                 })

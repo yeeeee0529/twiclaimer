@@ -496,7 +496,7 @@ impl BotCommandContext for FakeCommandContext {
                 channel: channel.clone(),
                 enabled: true,
                 next_refresh_at: Some(format!("2026-06-14T00:0{}:00.000Z", index + 4)),
-                seconds_until_refresh: Some(240.0 + index as f64 * 60.0),
+                seconds_until_refresh: Some(240 + index as u64 * 60),
             })
             .collect()
     }
@@ -644,7 +644,6 @@ impl BotCommandContext for FakeCommandContext {
             .map(|channel| SessionChannelPointsResult::Available {
                 channel,
                 balance: 1_000.0,
-                display_value: "1K".to_string(),
             })
             .collect())
     }
@@ -1281,7 +1280,6 @@ async fn query_timeout_replies_keeps_slot_and_suppresses_late_results() {
             points_result: Some(vec![SessionChannelPointsResult::Available {
                 channel: "first".to_string(),
                 balance: 1_000.0,
-                display_value: "1K".to_string(),
             }]),
             capture_result: Some(Some(SessionScreenshot {
                 channel: "first".to_string(),
@@ -1801,7 +1799,6 @@ async fn points_command_queries_all_channels_or_specific_channel() {
             SessionChannelPointsResult::Available {
                 channel: "first".to_string(),
                 balance: 1_234_567.0,
-                display_value: "1.23M".to_string(),
             },
             SessionChannelPointsResult::Unavailable {
                 channel: "second".to_string(),
@@ -1811,7 +1808,6 @@ async fn points_command_queries_all_channels_or_specific_channel() {
         vec![SessionChannelPointsResult::Available {
             channel: "second".to_string(),
             balance: 9_876.0,
-            display_value: "9.8K".to_string(),
         }],
     ]);
 
