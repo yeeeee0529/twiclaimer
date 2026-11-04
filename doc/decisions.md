@@ -212,3 +212,50 @@
   6. `get_gateway_bot` 回傳 `url: Option<String>`（舊版不驗 schema）；實際連線 URL 改用 twilight 預設值（§7.8 的 gateway 條目）。
 - 理由：twilight 是計畫已選定的 gateway 實作（Cargo.toml 既有依賴）；上述差異都能對回舊版在「真實 Discord payload」下的等價行為，僅 malformed payload 的 log 有差。
 - 影響：`src/discord/{api,bot}.rs`、`src/notifications/bot_command_context.rs`。其他已知取捨：twilight 內部兩處 panic 路徑（`ConfigBuilder::new` 的 TLS 載入、`InMemoryQueue::default` 需 runtime）非我方控制，start 在 runtime 內執行不受影響；`format_balance` 對 ≥1e21 照 `toString` 指數形（舊版展開十進位；點數不會到該量級，程式內已註明）；`content.slice(0,2000)` 以 Unicode 純量近似 UTF-16（僅補充字元的邊界情況理論上有差異）。DEC-013 的「使用端先行定義形狀型別」延伸至 notifications 的指令上下文型別（`WatchdogSchedulerSnapshot`／`StreamStatusChange`／`ChannelSessionRefreshStatus`／`SessionRefreshResult`／`SessionScreenshot`／`SessionChannelPointsResult` 等），統一債留到 S3.4／S3.5 落地後一併清。
+
+## DEC-022 S3.5 前置整併：DEC-013 佔位型別落地 / 舊 import 路徑保持 / 契約收斂（S3.5）
+
+- 日期：2026-11-04（步驟：S3.5 前置；主會話直接處理）
+- 問題：S3.5 派兩個代理平行移植 `sessions/manager.rs` 與 `scheduler/watchdog.rs`，而 DEC-019 把 scheduler／sessions／notifications 的介面形狀型別全暫放在 `notifications/bot_command_context.rs`（DEC-013 的「使用端先行定義」），兩代理會交叉修改同一檔；同時 DEC-020 定案的兩個型別收斂（`displayValue` 省略、`secondsUntilRefresh` 維度）尚未套用到該檔的佔位形。
+- 決定（commit `a048a2a`，派單前落地）：
+  1. 共用型別移進正式家位置：`WatchdogSchedulerSnapshot`／`SchedulerChannelStatus`／`StreamStatusChange` → `src/scheduler/watchdog.rs`；SessionManager 查詢結果型別（`SessionRefreshResult`／`SessionScreenshot`／`SessionChannelPointsResult`／`ChannelSessionRefreshStatus` 等）→ `src/sessions/manager.rs`；`ChannelSessionRefreshStatus` 的正式型別以 `src/browser/session.rs` 為準。
+  2. `src/notifications/bot_command_context.rs` 改為 `pub(crate) use` 重匯出（5 條），bot／discord／telegram 的既有 import 路徑零改動。`#![allow(dead_code)]`、import 的 `#[allow(unused_imports)]` 留待 S3.6 接線後收。
+  3. 契約收斂：`SessionChannelPointsResult::Available` 移除 `display_value` 欄位（DEC-020 的「點數讀取契約只回 `balance`」；舊版唯一形同 `balance.toLocaleString('en-US')` 的消費端不讀本欄）；`ChannelSessionRefreshStatus::seconds_until_refresh` 以 `u64` 維度統一，bots 呼叫端 `format_duration((seconds) as f64)`、discord／telegram 測試字面值同步改。
+- 理由：型別搬家不改行為，`pub(crate) use` 是保持測試與模組邊界的最小滲透接縫；先整併再派單，兩個代理的檔案邊界才乾淨。
+- 影響：`src/{notifications/bot_command_context,discord/bot,telegram/bot}.rs`（含測試）9 檔 +138/−112；DEC-019 結尾「統一債留 S3.4／S3.5」就此清完。port-coverage 不受此 commit 影響（動到的模組無舊測試直射對應）。
+
+## DEC-023 SessionManager 的機制對應與介面取捨（S3.5）
+
+- 日期：2026-11-04（步驟：S3.5；s35‑manager 代理移植、主會話合併並記錄）
+- 問題：舊版 `sessions/SessionManager.ts`（845 行）以承諾驅動：WeakSet 的 cancel-once、`runChannelExclusive` 的 map 尾部修剪、`withSessionOperationTimeout`（逾時不取消任務只丟結果）、插入序 Map／Set 迭代序與舊測試逐字日誌，在 Rust（`ChannelSession` 已於 S3.4 落地）下需要機制對應。
+- 決定：
+  1. **cancel-once（WeakSet）**：以 `Mutex<Vec<Weak<dyn ChannelSession>>>` 呈現——登記前先清已結束的弱參照；live 弱參照以 `std::ptr::addr_eq`（僅 strong_count>0 參與比對；位址相等即同一 session，不比 wide-pointer metadata）；標記在 `cancel_start` 之前與舊碼 `add` 後才呼叫一致
+  2. **runChannelExclusive**：每頻道一個 `ExclusiveQueue`（重用 `browser::manager` 的 pub(crate) 版本）＋登記序號 generation：排隊佔位在呼叫當下同步完成（對映 promise 當下接上尾巴）；operation 完成後僅當「Arc 相同且 generation 仍為本任務」才刪 map 項（`get(channel) === tail` 的等價條件）
+  3. **withSessionOperationTimeout**：`tokio::spawn`＋`select!`（JoinHandle vs `sleep(timeout_ms)`）；逾時＝JoinHandle drop 後 detached（對映 `operation.catch(() => undefined)`：不取消、結果丟棄），逾時 log 欄位 `{…fields, timeoutMs}`（`timeoutMs` 恆最後）並回 `SessionOperationTimeoutError { event, timeout_ms }`（`Display` = ``"${event} after ${timeoutMs}ms"``，safeErrorMessage 消毒同構）
+  4. **SanitizedValue 非 Send**：逾時欄位以 `FnOnce() -> Vec<(&'static str, SanitizedValue)>` closure 傳入、逾時 arm 內才組值（`FatalRecoveryFieldValue` 同款取捨）
+  5. **插入序 Map／Set**：`sessions`／`startingSessions`／`configuredChannels`／`stableRecoveryGenerations` 以插入序 `Vec`（不新增 IndexMap 依賴）保住 JS Map 迭代序；`reorderSessions` 照 desired 順序重建
+  6. **stopAll 快照時點**：sessions 快照＋清空 → startingSessions 快照，cancellation future 以「呼叫當下的快照」組出（sync 前段語意；曾修掉「輪詢時才抓快照」的偏差版）；captions／stops／pendingStarts 以 `join_all` 併跑，整體包在吞錯的 `session_stop_all_timeout` 內
+  7. **cancelPendingStarts 直接 `cancel_start`（不排頻道尾巴）**照舊；stopAll 對起始中頻道的 pendingStarts 空操作才排隊——「cancelStart 不解鎖時 stopAll 靠 timeout 完成」測試賴此序列化
+  8. `durationMs` 以 `std::time::Instant` 差值（DEC-020 (4) 前例）
+  9. **regex（§7.7）**：`(?i)` 前綴；`storage[\s_-]?` 的 `\s` 逐字展開為 plan §7.7 字元類別（`redact.rs` 的 `JS_WHITESPACE_CLASS` 為 private，本檔以同內容常數複製並註出處）；8 條 recoverable＋3 條 fatal 全有單元輸入（含 `導向非預期 Twitch URL`、`Browser Manager 尚未啟動`、`storage_state`／`storage-state`）
+  10. **getChannelPoints 的 catch 在 Rust 不可達**（trait 不回錯、DEC-020 (4)），不設 unreachable catch；`SessionChannelPointsUnavailableReason::Failed` 變體照舊保留於橋接並以字面值測試鎖定
+- 理由：§0 行為依據順位（舊版原始檔優先）；每項機制都能對回「真實 runtime（tokio runtime 不重入單一 thread 調度、單一 channel 佇列）」下的等價行為。
+- 影響：`src/sessions/manager.rs`（76 行 placeholder → 1928 行）＋`src/sessions/manager/tests.rs`（2322 行，38 個測試＝34 個舊測試移植＋4 個補充：regex 分支／timeout error 形狀／reason 字面值／cancelPendingStarts shutdown 旗標）；`SessionChannelSessionFactory` 的 real-factory impl 放在本檔（`src/browser/session.rs` 零改動）。合併後 main 全量：單元 826 passed／54 ignored（+58；SessionManager 部分 38）、e2e 54/54、npm 21、strict 三檔 49/49、clippy `-D warnings` 零警示。已知差異：**4 個逾時事件名不在 `doc/spec/log-events.txt`**（`session_start_timeout`／`session_start_cancel_timeout`／`session_stop_timeout`／`session_stop_all_timeout`——舊碼以變數轉發，extract-spec 抓不到），照舊版輸出且逐字有測試；S3.6 重抽 log-events 時補上。接線備註：工廠要組 `DefaultChannelSessionFactory`（browser manager／reward claimer／playback optimizer／health evaluator／三 observer／config），recovery 以 `Arc<Mutex<ChannelRecoveryPolicy>>` 注入（方法 `&mut self`、僅同步區上鎖），`on_invalidated` 回呼轉接 `invalidate(channel, reason)`（reason 字串原樣），`on_navigation_outcomes` 接 `reportNavigationOutcomes` 一路；接線後收掉本檔 `#![allow(dead_code)]`。
+
+## DEC-024 ReconcileCoordinator／WatchdogScheduler 的 promise 機制對應（S3.5）
+
+- 日期：2026-11-04（步驟：S3.5；s35‑coord 代理移植、主會話合併並記錄）
+- 問題：舊版 `sessions/ReconcileCoordinator.ts`（coalescing worker、`Promise.race` 的 5 秒 stop）與 `scheduler/WatchdogScheduler.ts`（interval＋rate-limit 窗口、`previousLiveStatuses` 轉換、`handleApiError` catch-all）的 promise／timer 機制在 Rust 的等價重現與介面對應。
+- 決定：
+  1. **`SchedulerTimer`**：`set_interval(Arc<dyn Fn() + Send + Sync>, f64) -> u64`／`clear_interval(u64)`——把手 opaque 為 `u64`、interval 以 `f64` 承接 JS number（fake assert 精確 45_000.0）；`DefaultSchedulerTimer` 為 tokio spawn 睡眠迴圈＋abort（小數毫秒 floor＋下夾 1ms：Node 截斷小數＋0ms 防 busy-loop，設定驗證保證為正）
+  2. **flight promise → watch 信號**：私有 `FlightSignal`（coordinator）／`TickFlight`（scheduler）多等待者（比 `JoinHandle` 多端可等）；完成信號在 finally 段（slot 清除＋可能重啟 worker）**之後**發，對映 promise resolve 順序
+  3. **stop 的 5 秒逾時**：`tokio::time::timeout(join!(flight_wait, cancel_pending_starts))`——逾時非錯誤、不清 worker flight（舊 `clearTimeout` 語意）；逾時 drop 的只是「等待的未來」，worker 的 spawn 任務照舊收尾（與 browser manager 對逾時 drop 的註記同款取捨），以 `start_paused`＋`advance` 可測
+  4. **錯誤型別**：coordinator 窄介面回 `Result<(), ReconcileError>`（`{ message }`，記點時 redact）——`reconcile_completed {outcome:'failed'}`／`reconcile_submit_failed` 可達；scheduler 側 session seam 重用同型別
+  5. **`cancelPendingStarts?.()` 選用性**：`cancel_pending_starts` 以預設 no-op 本體呈現（`Partial<Pick<…>>` 的鏡像，正式 SessionManager 兩者都實作）
+  6. **`runOnce` 回傳 `()`**：舊 rejection 來源只有可拋錯的注入接縫（selector／logger 在 Rust 為無失敗型別），`scheduler_tick_failed {reason:'unexpected_error'}` 分支不可達——事件名照 DEC-020 前例保留、無呼叫點；`durationMs` 以 `Instant`（同前例）
+  7. **API 錯誤 catch-all**：舊 `handleApiError` 收「非三類錯誤」；Rust twitch 介面把錯誤定型為三類，scheduler 接縫補 `WatchdogLiveStatusError::Unknown(String)`（blanket impl 從任何 `LiveStatusProvider` 自動轉接三類）——保住 `twitch_api_request_failed {kind:'unknown'}` 與 secret-redaction 測試的可移植；`Unknown` 訊息不進日誌（舊分支行為）
+  8. **通知語意**：`notify_status_change` 以 `tokio::spawn` 承接（queued-not-awaited，tick 不等）；observer 介面無失敗 → 舊 promise-rejection warn（`stream_status_notification_failed`）不可達、事件名照前例保留
+  9. **ISO 輔助**：`iso_utc_string_from_epoch_ms` 為模組內副本（與 twitch／logging 同一組 `time` 靜態格式、各模組獨立定義維持邊界——§7.7），含常數↔字串互測
+  10. **fire-and-forget 提交**（無 coordinator 的 `submitReconcile`）：`tokio::spawn`＋錯誤捕獲記 `reconcile_submit_failed {error}`；單元測試的同步前綴（舊 `vi` mock 靠 promise）改以 watch 通知驅動不等真實時間
+- 理由：§0 行為依據順位（舊版原始檔優先）；每項對應都能攤平到「真實 runtime」的等價行為，僅記點層 retaining 舊事件名（照既有不可達記點前例）。
+- 影響：`src/sessions/reconcile.rs`（514 行；2 個舊測試移植，paused-time shutdown）＋`src/scheduler/watchdog.rs`（25 行 placeholder → 1081 行；`it.each` 模板 2 個展開為 3＋2 案例，合計 16 個舊測試移植＋2 個接縫測試）＋`{sessions,scheduler}/mod.rs` 註冊。strict 三檔 49/49 未知 0（watchdog 13 個標題與 TSV 第 422–434 列逐字一致、reconcile 2 個第 265–266 列一致）。S3.6 接線備註：`TwitchApiClient` 經 blanket impl 直接餵 `SchedulerLiveStatusProvider`（傳具體型別的 `Arc<…>`）；SessionManager 需同時實作 `ReconcileSessionManager`／`SchedulerSessionReconcile`；coordinator 以 `Arc<dyn ReconcileCoordinator>` 持有（`SchedulerReconcileRequest` 已備 trait 物件轉接）；bots 的 `notifyStreamStatus` 實作 `StreamStatusObserver` 轉接；接線後收掉兩檔 module 級 `#![allow(dead_code)]`。債：`scheduler/selector.rs` 的 S2.5 最小 `ChannelLiveStatus` 依其檔內註記待 S3.1 後續清理（watchdog 以 `as_selector_statuses` 逐欄轉接）
