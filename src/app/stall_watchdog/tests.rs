@@ -9,6 +9,7 @@ use super::{
     StallRestartRequester, StallSchedulerSource, StallWatchdogLogger,
 };
 use crate::app::restart::ContainerRestartRequest;
+use crate::app::restart::ControllerFieldValue;
 use crate::logging::redact::SanitizedValue;
 
 /// 測試用的欄位值快照：`SanitizedValue` 的可 Send 子集（記錄時就地轉換，
@@ -26,14 +27,14 @@ enum TestField {
 /// 記錄一次請求的欄位（event, subject, fields）。
 type RecordedRequest = (String, String, Vec<(String, TestField)>);
 
-fn capture(value: &SanitizedValue) -> TestField {
+fn capture(value: &ControllerFieldValue) -> TestField {
     match value {
-        SanitizedValue::Null => TestField::Null,
-        SanitizedValue::Undefined => TestField::Undefined,
-        SanitizedValue::Bool(value) => TestField::Bool(*value),
-        SanitizedValue::Number(value) => TestField::Number(*value),
-        SanitizedValue::String(value) => TestField::Text(value.clone()),
-        _ => TestField::Other,
+        ControllerFieldValue::Null => TestField::Null,
+        // 捨棄形的非純量值：記錄對映舊版的 undefined；payload 不保留。
+        ControllerFieldValue::Droppable => TestField::Undefined,
+        ControllerFieldValue::Bool(value) => TestField::Bool(*value),
+        ControllerFieldValue::Num(value) => TestField::Number(*value),
+        ControllerFieldValue::Str(value) => TestField::Text(value.clone()),
     }
 }
 
@@ -90,7 +91,12 @@ impl StallWatchdogLogger for FakeWatchdogLogger {
         let fields = match fields {
             Some(SanitizedValue::Object(entries)) => entries
                 .iter()
-                .map(|(key, value)| (key.clone(), capture(value)))
+                .map(|(key, value)| {
+                    (
+                        key.clone(),
+                        capture(&ControllerFieldValue::from_sanitized(value)),
+                    )
+                })
                 .collect(),
             Some(other) => panic!("預期欄位是物件：{other:?}"),
             None => Vec::new(),

@@ -33,13 +33,64 @@ const DEFAULT_FLUSH_TIMEOUT_MS: f64 = 5_000.0;
 /// 舊版預設 notify 上限：3 秒。
 const DEFAULT_NOTIFY_TIMEOUT_MS: f64 = 3_000.0;
 
-/// 舊版 `ContainerRestartRequest`：`fields` 的 `undefined` 欄位以 `None`
-/// 對應，鍵值照插入順序保留（值為消毒前的 [`SanitizedValue`]）。
+/// 舊版 `ContainerRestartRequest` 的欄位值。`Send` 需求：request 與
+/// `SanitizedValue` 的 `Shared` 變體不是 `Send`，而 request 會被各接線端
+/// 移進外派的未來並跨 await 持有；本層欄位的生產端（browser manager fatal、
+/// session reward escalation、resource guard）只送字串／數字／布林／null，
+/// 故以封閉列舉承載（`FatalRecoveryFieldValue` 的同款取捨，見
+/// `browser/types.rs` 的註記）。日誌組裝（同步段）由
+/// [`ControllerFieldValue::to_sanitized_value`] 就地轉換。
 #[derive(Clone, Debug, PartialEq)]
+pub(crate) enum ControllerFieldValue {
+    Str(String),
+    Num(f64),
+    Bool(bool),
+    Null,
+    /// 非純量值：照舊版 `sanitizeFields` 捨去（payload 不保留——舊碼
+    /// 丟棄巢狀物件／undefined 以避免意外帶入敏感值；兩者的輸出不可能
+    /// 而觀察）。
+    Droppable,
+}
+
+impl ControllerFieldValue {
+    /// 由記點用的消毒值轉換（同步段使用；不跨 await 持有 Rc）。
+    pub(crate) fn from_sanitized(value: &SanitizedValue) -> Self {
+        match value {
+            SanitizedValue::String(text) => Self::Str(text.clone()),
+            SanitizedValue::Number(number) => Self::Num(*number),
+            SanitizedValue::Bool(value) => Self::Bool(*value),
+            SanitizedValue::Null => Self::Null,
+            // 其餘（物件／陣列／Map／Error／Shared）在 `sanitizeFields` 都是被
+            // 捨棄的非純量值；payload 不保留。
+            SanitizedValue::Undefined
+            | SanitizedValue::Object(_)
+            | SanitizedValue::Map(_)
+            | SanitizedValue::Array(_)
+            | SanitizedValue::Error(_)
+            | SanitizedValue::Shared(_) => Self::Droppable,
+        }
+    }
+
+    /// 對應舊版的純量輸出（記點欄位）；只會在純量值呼叫。
+    pub(crate) fn to_sanitized_value(&self) -> SanitizedValue {
+        match self {
+            Self::Str(text) => SanitizedValue::String(text.clone()),
+            Self::Num(number) => SanitizedValue::Number(*number),
+            Self::Bool(value) => SanitizedValue::Bool(*value),
+            Self::Null => SanitizedValue::Null,
+            // `sanitize_fields` 會先捨去；呼叫端不會取到（防衛分支）。
+            Self::Droppable => SanitizedValue::Undefined,
+        }
+    }
+}
+
+/// 舊版 `ContainerRestartRequest`：`fields` 的 `undefined` 欄位以 `None`
+/// 對應，鍵值照插入順序保留（值為消毒前的 [`ControllerFieldValue`]）。
+#[derive(Clone, Debug)]
 pub(crate) struct ContainerRestartRequest {
     pub reason: String,
     pub source: String,
-    pub fields: Option<Vec<(String, SanitizedValue)>>,
+    pub fields: Option<Vec<(String, ControllerFieldValue)>>,
 }
 
 impl ContainerRestartRequest {
@@ -167,23 +218,29 @@ impl ContainerRestartController {
 
     /// 對應舊版 `execute`。
     async fn execute(&self, request: ContainerRestartRequest) {
-        let sanitized_fields = sanitize_fields(request.fields.as_deref());
-        let mut log_fields = vec![
-            (
-                "reason".to_string(),
-                SanitizedValue::String(request.reason.clone()),
-            ),
-            (
-                "source".to_string(),
-                SanitizedValue::String(request.source.clone()),
-            ),
-        ];
-        log_fields.extend(sanitized_fields);
-        self.logger.error(
-            LogEvents::CONTAINER_RESTART_REQUESTED,
-            Some(&SanitizedValue::Object(log_fields)),
-        );
-
+        // 記點欄位（`SanitizedValue` 含 Rc，不是 `Send`）只在本區塊存活；
+        // 區塊結束即 drop，讓後續的 await 保持 Send（request 本體的欄位
+        // 封閉為 [`ControllerFieldValue`]）。
+        {
+            let sanitized_fields = sanitize_fields(request.fields.as_deref());
+            let mut log_fields = vec![
+                (
+                    "reason".to_string(),
+                    SanitizedValue::String(request.reason.clone()),
+                ),
+                (
+                    "source".to_string(),
+                    SanitizedValue::String(request.source.clone()),
+                ),
+            ];
+            // 舊版是物件展開 `{…基欄位, …fields}`：同名鍵以後者覆寫
+            //（request 欄位含 reason／source 時輸出仍是單一鍵）。
+            extend_override(&mut log_fields, sanitized_fields);
+            self.logger.error(
+                LogEvents::CONTAINER_RESTART_REQUESTED,
+                Some(&SanitizedValue::Object(log_fields)),
+            );
+        }
         self.notify_with_timeout(&request).await;
         self.flush_with_timeout().await;
         (self.exit)(1);
@@ -210,31 +267,38 @@ impl ContainerRestartController {
     }
 }
 
+/// 舊版物件展開的同名鍵覆寫：`{…先前的鍵, …items}` 對同名鍵後者勝。
+fn extend_override(
+    fields: &mut Vec<(String, SanitizedValue)>,
+    items: Vec<(String, SanitizedValue)>,
+) {
+    for (name, value) in items {
+        if let Some(entry) = fields.iter_mut().find(|(key, _)| *key == name) {
+            entry.1 = value;
+        } else {
+            fields.push((name, value));
+        }
+    }
+}
+
 /// 舊版 `exit ?? ((code) => process.exit(code))` 的預設值。
 fn default_exit() -> Arc<dyn Fn(i32) + Send + Sync> {
     Arc::new(|code| std::process::exit(code))
 }
 
-/// 對應舊版 `sanitizeFields`：丟棄 `undefined` 與巢狀物件（避免意外帶入
-/// 敏感物件，舊版註解）；`null` 與純量保留。
-fn sanitize_fields(fields: Option<&[(String, SanitizedValue)]>) -> Vec<(String, SanitizedValue)> {
+/// 對應舊版 `sanitizeFields`：丟棄非純量值（巢狀物件等，避免意外帶入敏感
+/// 物件，舊版註解）；`null` 與純量保留。Rust 版的欄位值已封閉為
+/// [`ControllerFieldValue`]，捨棄以 [`ControllerFieldValue::Droppable`] 呈現。
+fn sanitize_fields(
+    fields: Option<&[(String, ControllerFieldValue)]>,
+) -> Vec<(String, SanitizedValue)> {
     let Some(fields) = fields else {
         return Vec::new();
     };
     fields
         .iter()
-        .filter(|(_, value)| {
-            !matches!(
-                value,
-                SanitizedValue::Undefined
-                    | SanitizedValue::Object(_)
-                    | SanitizedValue::Map(_)
-                    | SanitizedValue::Array(_)
-                    | SanitizedValue::Error(_)
-                    | SanitizedValue::Shared(_)
-            )
-        })
-        .cloned()
+        .filter(|(_, value)| *value != ControllerFieldValue::Droppable)
+        .map(|(name, value)| (name.clone(), value.to_sanitized_value()))
         .collect()
 }
 

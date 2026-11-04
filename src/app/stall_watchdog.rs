@@ -262,11 +262,11 @@ impl Inner {
                 fields: Some(vec![
                     (
                         "inFlightDurationMs".to_string(),
-                        SanitizedValue::Number(in_flight_duration_ms as f64),
+                        super::restart::ControllerFieldValue::Num(in_flight_duration_ms as f64),
                     ),
                     (
                         "stallThresholdMs".to_string(),
-                        SanitizedValue::Number(self.stall_threshold_ms),
+                        super::restart::ControllerFieldValue::Num(self.stall_threshold_ms),
                     ),
                 ]),
             });

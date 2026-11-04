@@ -38,6 +38,11 @@ mkdir -p "${out}"
 # DEC-020：補抓多行呼叫——層級字串單獨一行時（safeLog(logger,\n 'warn',\n '事件',…)），抓下一行
 # 的最後一個單引號事件名；三元式（phase === 'config' ? LOG_EVENTS.CONFIG_ERROR : 'service_start_failed'）
 # 取最後一個，使字面事件也收錄。
+# DEC-023（S3.6 補抓）：withSessionOperationTimeout(operator, 'session_…_timeout', …) 的
+# 逾時事件名經變數轉發（safeLog('warn', timeoutEvent, …)），單一字面獨立一行——在
+# withSessionOperationTimeout( 之後 4 行內出現「一整行只有一個引號字面、以逗號結尾」
+# 的行即收錄（形狀刻意限定在該 helper 的呼叫窗口：如 browser_page_close_timeout 是
+# BrowserManager 的 closeWithTimeout，窗口外，不收；TSV 此形状不會碰）。
 {
   grep -rhoE "\b(debug|info|warn|error)\(\s*'[a-z][a-z0-9_]+'" "${old}/src" || true
   grep -rhoE "'(debug|info|warn|error)',\s*'[a-z][a-z0-9_]+'" "${old}/src" || true
@@ -58,6 +63,20 @@ mkdir -p "${out}"
       next
     }
     /^[[:space:]]*'"'"'(debug|info|warn|error)'"'"',[[:space:]]*$/ { expect_event = 1 }
+  ' || true
+  find "${old}/src" -name '*.ts' -print0 | xargs -0 awk '
+    FNR == 1 { timeout_window = 0 }
+    /withSessionOperationTimeout\(/ { timeout_window = 4; next }
+    timeout_window > 0 {
+      if ($0 ~ /^[[:space:]]*'"'"'[a-z][a-z0-9_]*'"'"',[[:space:]]*$/) {
+        token = $0
+        gsub(/^[[:space:]]*'"'"'|'"'"',[[:space:]]*$/, "", token)
+        print "\047" token "\047"
+        timeout_window = 0
+      } else {
+        timeout_window--
+      }
+    }
   ' || true
 } | grep -oE "'[a-z][a-z0-9_]+'" | tr -d "'" | grep -vxE 'debug|info|warn|error' | LC_ALL=C sort -u > "${out}/log-events.txt"
 

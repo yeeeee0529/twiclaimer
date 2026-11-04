@@ -116,9 +116,13 @@ session_screenshot_failed
 session_start_attempt_completed
 session_start_attempt_started
 session_start_cancel_failed
+session_start_cancel_timeout
 session_start_failed
 session_start_retry_scheduled
+session_start_timeout
+session_stop_all_timeout
 session_stop_failed
+session_stop_timeout
 side_nav_collapse_skipped
 side_nav_collapsed
 stream_mute_skipped

@@ -51,7 +51,6 @@
 //! - 舊版 `now?: () => Date` 以 epoch 毫秒 [`DefaultSchedulerClock`] 呈現；
 //!   ISO 字串以 [`iso_utc_string_from_epoch_ms`] 對應 `Date.toISOString()`
 //!   （格式照計畫 §7.7，與 twitch／logging 模組同一組、各模組獨立定義）。
-#![allow(dead_code)]
 
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -236,6 +235,9 @@ pub(crate) trait SchedulerLiveStatusProvider: Send + Sync {
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum WatchdogLiveStatusError {
     Api(TwitchApiError),
+    /// crate 內不建構（blanket impl 只轉接三類）；保留給外部
+    /// [`LiveStatusProvider`] 實作的 catch-all（DEC-024 (7)）。
+    #[allow(dead_code)]
     Unknown(String),
 }
 

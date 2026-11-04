@@ -32,7 +32,8 @@
 //! - 舊版觀察者「拋錯」以 `Err` 回傳值表達（見 types.rs 的 trait 註解）。
 //! - 舊版逾時事件名稱（`browser_page_close_timeout` 等，由
 //!   `event.replace('_failed', '_timeout')` 衍生）不在 `doc/spec/log-events.txt`
-//!   的 149 個清單內，但舊測試逐字斷言，照舊版輸出。
+//!   清單內（DEC-023 的補抓形狀只涵蓋 `withSessionOperationTimeout` 的
+//!   `session_…_timeout`），但舊測試逐字斷言，照舊版輸出。
 //! - `now` 注入時鐘只用於排程邏輯（crash 相關、退避重置）；close 的
 //!   `durationMs` 用單調時鐘（對應舊版直接呼叫 `Date.now()`）。
 #![allow(dead_code)]

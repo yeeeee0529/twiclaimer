@@ -222,7 +222,7 @@ fn env_value<'a>(env: &'a ProcessEnv, key: &str) -> Option<&'a str> {
 
 /// 舊版的 `process.env` 預設值：真實程序的環境變數（非 UTF-8 的鍵或值略過，
 /// `ProcessEnv` 只放得下字串）。
-fn collect_process_env() -> ProcessEnv {
+pub(crate) fn collect_process_env() -> ProcessEnv {
     std::env::vars_os()
         .filter_map(|(key, value)| {
             let (key, value) = (key.into_string().ok()?, value.into_string().ok()?);
