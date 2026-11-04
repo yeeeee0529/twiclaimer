@@ -22,11 +22,8 @@
 //!   訊息（[`super::runner::UNKNOWN_APPLICATION_FAILURE`]）。
 //!
 //! `target.exitCode` 的正式端是程序層的 exit code（[`PROCESS_EXIT_CODE`]，
-//! 未來 main 收尾讀取）；測試 fake 各保存自己的值以便斷言。
-//!
-//! `#![allow(dead_code)]` 保留至 main 的 no-arg 啟動接線（安裝 handlers 的
-//! 正式呼叫端；下一段）：先以測試鎖定接縫形狀與訊號／panic 行為。
-#![allow(dead_code)]
+//! 由 lib 的 `run_service`（舊版 `index.ts` 的 `main()`）收尾讀取）；測試
+//! fake 各保存自己的值以便斷言。
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -39,6 +36,11 @@ use crate::logging::redact::SanitizedValue;
 /// 舊版 `target.exitCode` 的程序層值：處理器設定後的 exit code（main 收尾
 /// 讀取；0 代表尚未設定，just 與舊版 `exitCode` 的 undefined-with-default 相同）。
 static PROCESS_EXIT_CODE: AtomicI32 = AtomicI32::new(0);
+
+/// 讀取程序層 exit code（`lib::run_service` 收尾；§7.9）。
+pub(crate) fn process_exit_code() -> i32 {
+    PROCESS_EXIT_CODE.load(Ordering::SeqCst)
+}
 
 /// 舊版 `SIGINT`／`SIGTERM` union。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -57,6 +59,7 @@ impl ProcessSignal {
     }
 
     /// fake 的 `listenerCount` 排列（先 SIGINT、後 SIGTERM，照舊版 listener 表）。
+    #[cfg(test)]
     pub(crate) fn index(self) -> usize {
         match self {
             ProcessSignal::Sigint => 0,

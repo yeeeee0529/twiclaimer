@@ -132,7 +132,13 @@ impl ProcessMetricsSource for DefaultProcessMetrics {
                     // 舊版 process.cpuUsage()：微秒。
                     let user_time = usage.user_time();
                     let system_time = usage.system_time();
+                    // tv_usec() 的回傳型別隨平台不同：macOS 是 u32（需要
+                    // i64::from），Linux 是 i64（轉換是多餘的，clippy 會報
+                    // useless_conversion）。不能用 `as i64`，Linux 上會改報
+                    // unnecessary_cast。故僅於此處允許該 lint。
+                    #[allow(clippy::useless_conversion)]
                     let user_us = user_time.tv_sec() * 1_000_000 + i64::from(user_time.tv_usec());
+                    #[allow(clippy::useless_conversion)]
                     let system_us =
                         system_time.tv_sec() * 1_000_000 + i64::from(system_time.tv_usec());
                     // 舊版 resourceUsage().maxRSS 是 KB：Linux 的 ru_maxrss 已是

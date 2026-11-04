@@ -1,7 +1,7 @@
 services:
   twitch-watchdog:
-    image: ${SMOKE_IMAGE:-twitch-watchdog:smoke}
-    container_name: ${SMOKE_CONTAINER_NAME:-twitch-watchdog-smoke}
+    image: ${SMOKE_IMAGE:-twiclaimer:smoke}
+    container_name: ${SMOKE_CONTAINER_NAME:-twiclaimer-smoke}
     restart: "no"
     network_mode: none
     environment:

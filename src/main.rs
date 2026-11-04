@@ -1,10 +1,15 @@
-//! twiclaimer CLI（§4.2）：`--version` 與開發用 `probe` 子命令（§7.3.7），
-//! 正式服務的啟動在後續步驟加入。
+//! twiclaimer CLI（§4.2）：無參數啟動正式服務（舊版 `index.ts` 的 `main()`，
+//! 經 lib 的 `run_service`）、`--version` 與開發用 `probe` 子命令（§7.3.7）。
 //!
-//! probe 經 lib 的公開 API（`twiclaimer::run_probe`）呼叫（DEC-014 收尾：
-//! 舊版以 `#[path]` 把模組樹掛進 bin crate，S3.6 接線後移除）。
+//! probe 與服務都經 lib 的公開 API（`twiclaimer::run_probe`／
+//! `twiclaimer::run_service`）呼叫（DEC-014 收尾：bin 不再以 `#[path]` 掛載
+//! 模組樹）。
 
 fn main() {
+    // 計畫（rustls 依賴列）：main 開頭安裝 aws-lc-rs provider，避免 provider
+    // 不明確時 panic；重複安裝的 Err 無害。
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
         Some("--version") => println!("twiclaimer {}", env!("CARGO_PKG_VERSION")),
@@ -19,8 +24,29 @@ fn main() {
             print_usage();
             std::process::exit(2);
         }
-        None => print_usage(),
+        // 舊版 index.ts：無參數即啟動服務。
+        None => start_service(),
     }
+}
+
+/// 以 current_thread runtime（D13）執行服務；結束前 flush stdout（§7.9）。
+fn start_service() {
+    let runtime = match tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .max_blocking_threads(4)
+        .build()
+    {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            eprintln!("cannot start the async runtime: {error}");
+            std::process::exit(1);
+        }
+    };
+    let exit_code = runtime.block_on(twiclaimer::run_service());
+    // §7.9：程序結束前 flush stdout（logger 每行即時寫出，此處兜底）。
+    let mut stdout = std::io::stdout();
+    let _ = std::io::Write::flush(&mut stdout);
+    std::process::exit(exit_code);
 }
 
 /// 以 current_thread runtime（D13）執行 probe。

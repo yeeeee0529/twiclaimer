@@ -27,7 +27,9 @@ use crate::browser::cdp::launcher::{
 const CLEANUP_DEADLINE: Duration = Duration::from_secs(3);
 
 /// 假瀏覽器：回應握手指令、收到 `Browser.close` 就結束；收到的訊息記到 profile 目錄。
-const RESPONDING_SCRIPT: &str = r#"#!/bin/sh
+/// Shebang 用 bash：`read -d` 是 bash 擴充，Ubuntu 的 `/bin/sh`（dash）不支援，
+/// 會讓腳本啟動即失敗（macOS 的 `/bin/sh` 是 bash，本機測不出）。
+const RESPONDING_SCRIPT: &str = r#"#!/bin/bash
 user_data_dir=
 for arg in "$@"; do
   case "$arg" in --user-data-dir=*) user_data_dir=${arg#--user-data-dir=} ;; esac
@@ -45,7 +47,8 @@ done
 "#;
 
 /// 假瀏覽器：回應握手，但**不理會** `Browser.close`（模擬關不掉的瀏覽器）。
-const STUBBORN_SCRIPT: &str = r#"#!/bin/sh
+/// Shebang 用 bash：理由同 `RESPONDING_SCRIPT`。
+const STUBBORN_SCRIPT: &str = r#"#!/bin/bash
 while IFS= read -r -d '' msg <&3; do
   id=$(printf '%s' "$msg" | sed -n 's/^.*"id":\([0-9][0-9]*\).*$/\1/p')
   case "$msg" in
