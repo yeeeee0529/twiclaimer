@@ -1,6 +1,6 @@
 # 進度
 
-- 目前狀態：**進行中（2026-11-04）**——S5.1–S5.4 完成（Docker 打包＋smoke 全綠＋文件＋strict 覆蓋率；過程發現並修正五項問題，記 DEC-026）。已完成步驟：S1.1–S1.8、S2.1–S2.6、S3.1–S3.6、S4.1–S4.3、S5.1–S5.4、S1 關卡（本機可驗部分）、S2 關卡、S3 關卡、S4 關卡。剩餘：S5.5（A/B 24 小時，【人工】，A 側基準需先補 S0.1／S0.2／S0.4／S0.6）與 S5.6（切換，【人工】）。執行中的代理：無
+- 目前狀態：**進行中（2026-11-05）**——S5.1–S5.4 完成（Docker 打包＋smoke 全綠＋文件＋strict 覆蓋率；過程發現並修正五項問題，記 DEC-026）。S5.5 進行中：B 側（Rust）已跑完並分析（R1／R7 初步過關；DEC-027 修正兩項量測工具），A 側（舊版）待跑。已完成步驟：S1.1–S1.8、S2.1–S2.6、S3.1–S3.6、S4.1–S4.3、S5.1–S5.4、S1 關卡（本機可驗部分）、S2 關卡、S3 關卡、S4 關卡。剩餘：S5.5（A 側 24 小時＋R6／R8【人工】）與 S5.6（切換，【人工】）。執行中的代理：無
 - 測試移植（2026-11-04 以 `scripts/port-coverage.sh` 量測）：舊清單 434 列（唯一 433；基準 `d49363d`＋DEC‑020 修 extract‑spec 補抓；log‑events 158）：**已處置 433、缺 0、未知標題 0——全部移植完成**（`%s 時拒絕設定` 重複標題警告為 config.test.ts 既有 it.each，test‑port.md 已註記）
 - DEC-016：使用者裁示**納入**舊版 `306b4ba`、`d49363d` 兩個 commit（基準改為 `d49363d`），重跑 `extract-spec.sh`（+10 唯一標題、log‑events +3 事件）；已完成的移植不回頭改（兩 commit 未動到已移植模組）
 - DEC-017：`Locator::evaluate` 的 undefined 回值不再視為「沒有元素」（S1.7 e2e 揭露，依 Playwright 1.62.1 實際行為修正 `src/browser/cdp/locator.rs`）；existing e2e 全綠
@@ -62,7 +62,7 @@
 | S5.2 | 完成 | 2026-11-04 | 0.4 天 | `scripts/docker-smoke.sh`（§11.3 十一項 Rust 版；第 10 項以容器 ExitCode==0 代理驗證無殘留 headless shell、第 11 項輸出 `docker save \| gzip -1` 位元組數）＋smoke compose 預設 image 改 `twiclaimer:smoke`。smoke／test stage 抓出並修正：**main 無參數啟動分支缺失**（lib 新增 `run_service`＝舊版 `index.ts` `main()` 移植＋`StopNotifyingRunner`＋`kill_all_registered` 收尾＋rustls provider 安裝，記 DEC-026 (4)）、Linux-only clippy `useless_conversion`（平台 `tv_usec()` 型別差）、假瀏覽器腳本 dash 不支援 `read -d`（改 `#!/bin/bash`）、smoke 版本檢查的 CMD 覆蓋語意（記 DEC-026 (1)(2)(3)）。結果：**11 項全過**，image 大小 304,499,233 bytes；容器內單元 589 passed／53 ignored、e2e 53/53 | 本 commit |
 | S5.3 | 完成 | 2026-11-04 | 0.1 天 | 四份文件：`README.md`、`README_DEV.md`（照舊版結構與中英雙語風格改寫：快速開始、資源防護、Telegram／Discord 管理、診斷 log、開發流程、Docker 驗證）、`CHANGELOG.md`（0.1.0：X1–X9 逐項＋§12 升級／回復步驟）、`test-node/docker/README.md`（smoke 11 項說明）。文件提到的指令／路徑（npm scripts、scripts/、tools/ref/、src/ 模組）皆實查存在 | 本 commit |
 | S5.4 | 完成 | 2026-11-04 | | `scripts/port-coverage.sh --strict` 433/433、缺 0、未知標題 0（含 main 接線等 S5 期間所有程式碼變更後重跑；Docker test stage 內亦 433/433） | 本 commit |
-| S5.5 | 未開始【人工】 | | | A/B 24 小時：A 側（舊版）基準需先補 S0.1／S0.2／S0.4／S0.6；量法 §10（R1–R3） | |
+| S5.5 | 進行中【人工】 | | | B 側（Rust）已跑完並分析：~18 小時窗口（rotation 吃掉開頭約 6 小時）、R1 控制端 RSS 36–56 MiB 過關、R7 初步過關（170 次領取、16 次頁面崩潰全恢復、零 OOM／重啟）；發現並修正 S0.3 pattern 與 snapshot_stats CPU 時間窗（DEC-027）。A 側（舊版）待跑（兼作 S0 基準補測）；R6／R8 待人工；chromium-args 待重抓 | |
 | S5.6 | 未開始【人工】 | | | 切換與 24–72 小時觀察（§12 指令；回復條件見 CHANGELOG） | |
 
 ## 階段回報

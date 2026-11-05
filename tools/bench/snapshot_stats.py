@@ -38,7 +38,7 @@ for t in sorted(rows):
     mem[pages].append((rss, cg_mem))
     if prev is not None:
         dt, dp, dc = t - prev[0], p_cpu - prev[1], cg_cpu - prev[2]
-        if 0 < dt <= 300 and dp >= 0 and dc >= 0:  # 略過重啟造成的負差值與長時間中斷
+        if 0 < dt <= 330 and dp >= 0 and dc >= 0:  # 300 秒區間含排程抖動；略過重啟造成的負差值與長時間中斷
             acc = cpu[pages]
             acc[0] += dp
             acc[1] += dc

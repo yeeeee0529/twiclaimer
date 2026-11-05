@@ -608,7 +608,7 @@ S0.3【人工】正式環境的 Chromium 參數（找出主要的 headless shell
 docker compose exec -T twitch-watchdog sh -c '
   for p in /proc/[0-9]*; do
     a=$(tr "\0" "\n" < "$p/cmdline" 2>/dev/null) || continue
-    case "$a" in *headless_shell*|*chrome-headless-shell*) ;; *) continue ;; esac
+    case "$a" in *headless_shell*|*headless-shell*) ;; *) continue ;; esac
     case "$a" in *--type=*) continue ;; esac
     printf "%s\n" "$a"; break
   done' | tail -n +2 | sed -E 's#^--user-data-dir=.*#--user-data-dir=<tmp>#' > chromium-args-prod.txt
@@ -2230,7 +2230,7 @@ for t in sorted(rows):
     mem[pages].append((rss, cg_mem))
     if prev is not None:
         dt, dp, dc = t - prev[0], p_cpu - prev[1], cg_cpu - prev[2]
-        if 0 < dt <= 300 and dp >= 0 and dc >= 0:  # 略過重啟造成的負差值與長時間中斷
+        if 0 < dt <= 330 and dp >= 0 and dc >= 0:  # 300 秒區間含排程抖動；略過重啟造成的負差值與長時間中斷
             acc = cpu[pages]
             acc[0] += dp
             acc[1] += dc
