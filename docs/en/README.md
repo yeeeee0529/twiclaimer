@@ -224,6 +224,18 @@ docker compose logs -f twitch-watchdog
 
 `docker compose build` creates the in-container non-root user from `APP_UID`/`APP_GID` (default 1000). If the host `config.yml` is not owned by 1000:1000, add `--build-arg APP_UID=<uid> --build-arg APP_GID=<gid>` so bot config writeback can persist changes.
 
+### Use the prebuilt image (GitHub Actions)
+
+Every push to `main` runs the full test suite in GitHub Actions (`.github/workflows/docker-image.yml`). Only when it passes is the production image published to `ghcr.io/yeeeee0529/twiclaimer` (tags `latest` and the commit SHA; built with `APP_UID`/`APP_GID` = 1001). The server can pull it instead of compiling:
+
+```bash
+export TWICLAIMER_IMAGE=ghcr.io/yeeeee0529/twiclaimer:latest   # or put it in .env
+docker compose pull
+docker compose up -d
+```
+
+If the package is private, run `docker login ghcr.io` once with a token that has `read:packages`. For a different uid/gid, edit `APP_UID`/`APP_GID` in the workflow, or build locally with `docker compose build`.
+
 Compose mounts `config.yml` as a writable bind mount so Telegram and Discord management commands can save settings; `data/browser-state` stays read-only. `config.yml` must be writable by the `APP_UID`/`APP_GID` user. Use owner or group permissions, not world-writable permissions.
 
 Common operations:

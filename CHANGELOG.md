@@ -2,6 +2,11 @@
 
 本檔記錄 twiclaimer（Twitch Watchdog 的 Rust 版）與 Node.js 版（基準 `d49363d`）之間的差異與切換步驟。使用說明見 [README.md](README.md) 與 [完整說明](docs/zh-TW/README.md)；開發與測試見 [README_DEV.md](README_DEV.md)。
 
+## Unreleased
+
+- 新增 GitHub Actions（`.github/workflows/docker-image.yml`）：push 到 `main` 先跑 Docker test stage，通過後才把正式 image 發布到 `ghcr.io/yeeeee0529/twiclaimer`（`latest`＋commit SHA，`APP_UID`／`APP_GID` = 1001）。`docker-compose.yml` 的 image 可由 `TWICLAIMER_IMAGE` 覆寫，預設仍為 `twiclaimer:local`。伺服器用 `docker compose pull` 取代本機編譯。
+- `Dockerfile`：release build 不再掛載 `/src/target` 快取。
+
 ## 0.1.0 (2026-11-04)
 
 Twitch Watchdog 的 Rust 移植首版。以舊版原始碼為行為依據逐模組移植（設定、日誌、CDP 驅動、session、排程、Telegram、Discord），舊行為、設定檔欄位與日誌事件名稱逐字對齊；僅下列 X1–X10 為允許的差異。

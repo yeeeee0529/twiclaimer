@@ -32,8 +32,6 @@ ENV RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo PATH=/usr/local/ca
 RUN curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal \
       --default-toolchain "${RUST_VERSION}" -c rustfmt -c clippy
 WORKDIR /src
-# 降低並行度：此主機曾在高負載編譯時出現間歇性 LLVM 崩潰（SIGILL / lld 配置失敗）
-ENV CARGO_BUILD_JOBS=2
 COPY . .
 RUN grep -q "channel = \"${RUST_VERSION}\"" rust-toolchain.toml
 # 不掛載 /src/target 快取：陳舊的 thin LTO bitcode 曾使 rustc（LLVM）以 SIGILL 崩潰

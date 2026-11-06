@@ -8,7 +8,7 @@ services:
       args:
         - APP_UID
         - APP_GID
-    image: twiclaimer:local
+    image: ${TWICLAIMER_IMAGE:-twiclaimer:local}
     container_name: twitch-watchdog
     init: true
     restart: unless-stopped

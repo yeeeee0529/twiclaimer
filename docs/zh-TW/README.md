@@ -224,6 +224,18 @@ docker compose logs -f twitch-watchdog
 
 `docker compose build` 以 `APP_UID`／`APP_GID`（預設 1000）建立容器內的非 root 使用者。主機上 `config.yml` 的擁有者不是 1000:1000 時，請加上 `--build-arg APP_UID=<uid> --build-arg APP_GID=<gid>`，讓 Bot 的設定寫回可以寫入。
 
+### 使用預先建置的 image（GitHub Actions）
+
+每次 push 到 `main` 都會在 GitHub Actions（`.github/workflows/docker-image.yml`）跑完整測試，通過後才把正式 image 發布到 `ghcr.io/yeeeee0529/twiclaimer`（標籤 `latest` 與 commit SHA；以 `APP_UID`／`APP_GID` = 1001 建置）。伺服器可以直接拉取，不必自行編譯：
+
+```bash
+export TWICLAIMER_IMAGE=ghcr.io/yeeeee0529/twiclaimer:latest   # 或寫進 .env
+docker compose pull
+docker compose up -d
+```
+
+套件為私有時，先用具備 `read:packages` 權限的 token 執行一次 `docker login ghcr.io`。需要其他 uid/gid 時，修改 workflow 內的 `APP_UID`／`APP_GID`，或改用 `docker compose build` 在本機建置。
+
 Compose 以可寫的 bind mount 掛載 `config.yml`，供 Telegram 與 Discord 的管理指令保存設定；`data/browser-state` 維持唯讀。`config.yml` 必須能被 `APP_UID`／`APP_GID` 的使用者寫入，請用擁有者或群組權限處理，不要用全域可寫權限部署。
 
 常用操作：
