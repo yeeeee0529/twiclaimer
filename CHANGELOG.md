@@ -1,12 +1,12 @@
 # Changelog
 
-本檔記錄 twiclaimer（Twitch Watchdog 的 Rust 版）與 Node.js 版（基準 `d49363d`）之間的差異與切換步驟。使用說明見 [README.md](README.md)；開發與測試見 [README_DEV.md](README_DEV.md)。
+本檔記錄 twiclaimer（Twitch Watchdog 的 Rust 版）與 Node.js 版（基準 `d49363d`）之間的差異與切換步驟。使用說明見 [README.md](README.md) 與 [完整說明](docs/zh-TW/README.md)；開發與測試見 [README_DEV.md](README_DEV.md)。
 
 ## 0.1.0 (2026-11-04)
 
-Twitch Watchdog 的 Rust 移植首版。以舊版原始碼為行為依據逐模組移植（設定、日誌、CDP 驅動、session、排程、Telegram、Discord），旧行為、設定檔欄位與日誌事件名稱逐字對齊；僅下列 X1–X9 為允許的差異。
+Twitch Watchdog 的 Rust 移植首版。以舊版原始碼為行為依據逐模組移植（設定、日誌、CDP 驅動、session、排程、Telegram、Discord），舊行為、設定檔欄位與日誌事件名稱逐字對齊；僅下列 X1–X10 為允許的差異。
 
-### 允許的差異 / Intentional differences
+### 允許的差異
 
 | 編號 | 項目 | 舊版（Node.js） | twiclaimer（Rust） |
 | --- | --- | --- | --- |
@@ -19,18 +19,19 @@ Twitch Watchdog 的 Rust 移植首版。以舊版原始碼為行為依據逐模�
 | X7 | 瀏覽器操作的錯誤訊息 | Playwright 訊息含 `Call log:` 多行 | 只有第一行，內容與 Playwright 相同 |
 | X8 | Locator 的頁面內腳本 | Playwright 的 injected script 在 utility world 執行 | 同一份 injected script（`tools/ref/dump-injected.mjs` 取出）在 main world 執行，以 handle 持有、不設全域變數 |
 | X9 | 暫存目錄名稱 | `playwright_chromiumdev_profile-*` 等 | `twiclaimer-*` |
+| X10 | Bot 訊息文字 | 啟停通知為「Twitch Watchdog 已啟動／已停止」；推播與狀態回覆前綴 🔴、⚫、🎁、⚠️，單句回覆以句號結尾 | 改為「twiclaimer 已啟動／已停止」；推播改為純文字，單句回覆不加句號。`/status` 頻道清單保留狀態圓點 |
 
-### 執行環境 / Runtime
+### 執行環境
 
 - Binary：`twiclaimer`（Rust 1.99.1，`cargo build --release --locked`）。
 - 瀏覽器：Chromium headless shell `151.0.7922.34`（Playwright `1.62.1` 同版），經 `--remote-debugging-pipe` 驅動；正式 image 以 `ubuntu:noble` 為底，不含 Node.js、原始碼與測試。
 - 登入工具與 CSV 匯出維持 Node.js（`npm run twitch:login`／`npm run benchmark:csv`），不進正式 image。
 
-### 升級步驟（從 twitch-watchdog-docker 切換）/ Upgrade steps
+### 升級步驟（從 twitch-watchdog-docker 切換）
 
 ```bash
 cd twiclaimer
-docker compose build --build-arg APP_UID=<S0.2 的 uid> --build-arg APP_GID=<S0.2 的 gid>
+docker compose build --build-arg APP_UID=<舊容器的 uid> --build-arg APP_GID=<舊容器的 gid>
 cp -a ../twitch-watchdog-docker/config.yml ./config.yml
 mkdir -p data && cp -a ../twitch-watchdog-docker/data/browser-state ./data/
 (cd ../twitch-watchdog-docker && docker compose down)
@@ -38,9 +39,9 @@ docker compose up -d
 docker compose logs -f --no-log-prefix twitch-watchdog    # 確認 service_started
 ```
 
-`APP_UID`／`APP_GID` 用舊版容器內使用者對主機 `config.yml` 的擁有者（S0.2 量得的值），讓 Bot 的設定寫回可以寫入 `config.yml`。`container_name` 維持 `twitch-watchdog`，維運指令不用改。
+`APP_UID`／`APP_GID` 填入主機上 `config.yml` 的擁有者 uid 與 gid（與舊版容器內使用者相同），讓 Bot 的設定寫回可以寫入 `config.yml`。`container_name` 維持 `twitch-watchdog`，維運指令不用改。
 
-### 回復 / Rollback
+### 回復
 
 ```bash
 cd twiclaimer && docker compose down

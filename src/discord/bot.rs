@@ -15,7 +15,7 @@
 //!   舊測試對「identify／heartbeat op 框」的斷言改以 [`build_shard_config`]
 //!   的設定值驗證（twilight 內部行為不可經 fake 觀察）。
 //! - `stop` 先（經接收迴圈）送 close code 1000（理由照舊版寫進 close frame），
-//!   再廣播 `Twitch Watchdog 已停止\n原因：<reason>`。
+//!   再廣播 `twiclaimer 已停止\n原因：<reason>`。
 #![allow(dead_code)]
 
 use std::borrow::Cow;
@@ -256,7 +256,7 @@ pub(crate) trait DiscordBot: Send + Sync {
     async fn start(&self) -> Result<(), DiscordApiError>;
 
     /// 舊版 `stop(reason)`：先關閉 gateway（close code 1000）再廣播
-    /// `Twitch Watchdog 已停止\n原因：<reason>`；重複呼叫無作用。
+    /// `twiclaimer 已停止\n原因：<reason>`；重複呼叫無作用。
     async fn stop(&self, reason: &str);
 
     /// 舊版 `notifyStreamStatus(change)`。
@@ -423,16 +423,16 @@ impl BotCore {
         if !should_close {
             return;
         }
-        self.broadcast(&format!("Twitch Watchdog 已停止\n原因：{reason}"))
+        self.broadcast(&format!("twiclaimer 已停止\n原因：{reason}"))
             .await;
     }
 
     /// 舊版 `notifyStreamStatus(change)`。
     async fn notify_stream_status(&self, change: &StreamStatusChange) {
         let text = if change.is_live {
-            format!("🔴 {} 已開台", change.channel)
+            format!("{} 已開台", change.channel)
         } else {
-            format!("⚫ {} 已離線", change.channel)
+            format!("{} 已離線", change.channel)
         };
         self.broadcast(&text).await;
     }
@@ -442,10 +442,10 @@ impl BotCore {
     async fn notify_reward(&self, result: &RewardClaimResult) {
         let text = match result {
             RewardClaimResult::Claimed { channel, .. } => {
-                format!("🎁 {channel} 已領取忠誠點數")
+                format!("{channel} 已領取忠誠點數")
             }
             RewardClaimResult::ClickFailed { channel, .. } => {
-                format!("⚠️ {channel} 忠誠點數領取失敗")
+                format!("{channel} 忠誠點數領取失敗")
             }
             RewardClaimResult::NotFound { .. } => return,
         };
@@ -526,7 +526,7 @@ impl BotCore {
                 event: "discord_unauthorized_dm_user",
                 field_name: "userId",
                 field_value: user_id,
-                message: "這個 Discord 使用者未被允許透過私訊控制服務。".to_string(),
+                message: "這個 Discord 使用者未被允許透過私訊控制服務".to_string(),
             });
         }
 
@@ -546,7 +546,7 @@ impl BotCore {
             event: "discord_unauthorized_channel",
             field_name: "channelId",
             field_value: channel_id,
-            message: "這個 Discord channel 未被允許使用。".to_string(),
+            message: "這個 Discord channel 未被允許使用".to_string(),
         })
     }
 
@@ -601,16 +601,16 @@ impl BotCore {
             "check" => {
                 self.defer(interaction).await?;
                 self.command_context.run_check().await?;
-                self.edit_reply(interaction, "已完成一次狀態檢查。").await?;
+                self.edit_reply(interaction, "已完成一次狀態檢查").await?;
             }
             "pause" => {
                 self.command_context.pause_checks().await?;
-                self.reply(interaction, "自動檢查已暫停。").await?;
+                self.reply(interaction, "自動檢查已暫停").await?;
             }
             "resume" => {
                 // 舊版 resumeChecks() 是同步 void（不會 reject）。
                 self.command_context.resume_checks();
-                self.reply(interaction, "自動檢查已恢復。").await?;
+                self.reply(interaction, "自動檢查已恢復").await?;
             }
             "screenshot" => {
                 self.defer(interaction).await?;
@@ -636,12 +636,12 @@ impl BotCore {
         let Some(requested_channel) = requested_channel else {
             let active_channels = self.command_context.get_active_channels();
             if active_channels.is_empty() {
-                self.edit_reply(interaction, "目前沒有正在觀看的頻道可供截圖。")
+                self.edit_reply(interaction, "目前沒有正在觀看的頻道可供截圖")
                     .await?;
                 return Ok(());
             }
 
-            self.edit_reply(interaction, "正在傳送截圖。").await?;
+            self.edit_reply(interaction, "正在傳送截圖").await?;
             let mut sent_count = 0usize;
             for channel in active_channels {
                 let screenshot = self
@@ -656,7 +656,7 @@ impl BotCore {
                 sent_count += 1;
             }
             if sent_count == 0 {
-                self.edit_reply(interaction, "目前沒有正在觀看的頻道可供截圖。")
+                self.edit_reply(interaction, "目前沒有正在觀看的頻道可供截圖")
                     .await?;
             }
             return Ok(());
@@ -669,7 +669,7 @@ impl BotCore {
         let Some(screenshot) = screenshot else {
             let active_channels = self.command_context.get_active_channels();
             let text = if active_channels.is_empty() {
-                "目前沒有正在觀看的頻道可供截圖。".to_string()
+                "目前沒有正在觀看的頻道可供截圖".to_string()
             } else {
                 [
                     format!("找不到正在觀看的頻道：{requested_channel}"),
@@ -681,7 +681,7 @@ impl BotCore {
             return Ok(());
         };
 
-        self.edit_reply(interaction, "正在傳送截圖。").await?;
+        self.edit_reply(interaction, "正在傳送截圖").await?;
         self.send_interaction_screenshot(interaction, &screenshot)
             .await
     }
@@ -699,7 +699,7 @@ impl BotCore {
         if results.is_empty() {
             let active_channels = self.command_context.get_active_channels();
             let text = if active_channels.is_empty() {
-                "目前沒有正在觀看的頻道可重整。".to_string()
+                "目前沒有正在觀看的頻道可重整".to_string()
             } else {
                 [
                     format!("找不到正在觀看的頻道：{}", requested_channel.unwrap_or("")),
@@ -729,7 +729,7 @@ impl BotCore {
         if results.is_empty() {
             let active_channels = self.command_context.get_active_channels();
             let text = if active_channels.is_empty() {
-                "目前沒有正在觀看的頻道可查詢忠誠點數。".to_string()
+                "目前沒有正在觀看的頻道可查詢忠誠點數".to_string()
             } else {
                 [
                     format!("找不到正在觀看的頻道：{}", requested_channel.unwrap_or("")),
@@ -831,7 +831,7 @@ impl BotCore {
                 BotFailure::Config(ConfigWriteError::Validation(validation)) => {
                     validation.message().to_string()
                 }
-                _ => "設定更新失敗，請確認 config.yml 可寫入。".to_string(),
+                _ => "設定更新失敗，請確認 config.yml 可寫入".to_string(),
             };
             self.logger.warn(
                 "discord_config_update_failed",
@@ -936,7 +936,7 @@ impl BotCore {
     /// 對應舊版 `formatServiceStarted`。
     fn format_service_started(&self) -> String {
         [
-            "Twitch Watchdog 已啟動".to_string(),
+            "twiclaimer 已啟動".to_string(),
             format!("監控頻道：{}", self.config.channels.len()),
             format!(
                 "最大同時觀看：{}",
@@ -1010,7 +1010,7 @@ impl BotCore {
     fn format_refresh_countdown(&self) -> String {
         let statuses = self.command_context.get_refresh_statuses();
         if statuses.is_empty() {
-            return "目前沒有正在觀看的頻道。".to_string();
+            return "目前沒有正在觀看的頻道".to_string();
         }
 
         let mut lines = vec!["重整倒數：".to_string()];

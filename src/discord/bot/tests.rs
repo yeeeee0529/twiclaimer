@@ -1048,8 +1048,8 @@ async fn registers_commands_identifies_to_the_gateway_and_handles_allowed_slash_
             .expect("lock");
         let contents: Vec<&str> = replies.iter().map(|(.., text)| text.as_str()).collect();
         assert!(contents.iter().any(|text| text.contains("自動檢查")));
-        assert!(contents.contains(&"自動檢查已暫停。"));
-        assert!(contents.contains(&"自動檢查已恢復。"));
+        assert!(contents.contains(&"自動檢查已暫停"));
+        assert!(contents.contains(&"自動檢查已恢復"));
     }
     {
         let edits = harness
@@ -1059,7 +1059,7 @@ async fn registers_commands_identifies_to_the_gateway_and_handles_allowed_slash_
             .lock()
             .expect("lock");
         let contents: Vec<&str> = edits.iter().map(|(.., text)| text.as_str()).collect();
-        assert!(contents.contains(&"已完成一次狀態檢查。"));
+        assert!(contents.contains(&"已完成一次狀態檢查"));
         assert!(contents.iter().any(|text| text.contains("手動重整結果")));
     }
     {
@@ -1145,7 +1145,7 @@ async fn rejects_interactions_from_unauthorized_channels() {
         replies.contains(&(
             "9".to_string(),
             "token-9".to_string(),
-            "這個 Discord channel 未被允許使用。".to_string()
+            "這個 Discord channel 未被允許使用".to_string()
         )),
         "{replies:?}"
     );
@@ -1248,7 +1248,7 @@ async fn rejects_direct_message_interactions_from_unauthorized_discord_users() {
         replies.contains(&(
             "11".to_string(),
             "token-11".to_string(),
-            "這個 Discord 使用者未被允許透過私訊控制服務。".to_string()
+            "這個 Discord 使用者未被允許透過私訊控制服務".to_string()
         )),
         "{replies:?}"
     );
@@ -1312,13 +1312,13 @@ async fn broadcasts_service_notifications_to_allowed_channels() {
     assert!(
         messages
             .iter()
-            .any(|m| m == &format!("{ALLOWED_CHANNEL_ID}:🔴 first 已開台")),
+            .any(|m| m == &format!("{ALLOWED_CHANNEL_ID}:first 已開台")),
         "{messages:?}"
     );
     assert!(
         messages
             .iter()
-            .any(|m| m == &format!("{ALLOWED_CHANNEL_ID}:🎁 first 已領取忠誠點數")),
+            .any(|m| m == &format!("{ALLOWED_CHANNEL_ID}:first 已領取忠誠點數")),
         "{messages:?}"
     );
     assert!(
@@ -1520,7 +1520,7 @@ async fn continues_to_handle_interactions_after_transport_issue() {
                 .lock()
                 .expect("lock")
                 .iter()
-                .any(|(.., text)| text == "自動檢查已暫停。")
+                .any(|(.., text)| text == "自動檢查已暫停")
         })
         .await;
     assert_eq!(*harness.context.shared.pause_count.lock().expect("lock"), 1);
@@ -1549,7 +1549,7 @@ async fn continues_to_handle_interactions_after_transport_issue() {
                 .lock()
                 .expect("lock")
                 .iter()
-                .any(|(.., text)| text == "自動檢查已恢復。")
+                .any(|(.., text)| text == "自動檢查已恢復")
         })
         .await;
     assert_eq!(

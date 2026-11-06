@@ -1104,7 +1104,7 @@ async fn starts_handles_authorized_commands_and_can_stop_the_long_polling() {
         messages
             .first()
             .expect("啟動訊息應存在")
-            .contains("Twitch Watchdog 已啟動"),
+            .contains("twiclaimer 已啟動"),
         "{messages:?}"
     );
     {
@@ -1131,15 +1131,15 @@ async fn starts_handles_authorized_commands_and_can_stop_the_long_polling() {
         assert_eq!(markup.resize_keyboard, Some(true));
     }
     assert!(
-        messages.contains(&"已完成一次狀態檢查。".to_string()),
+        messages.contains(&"已完成一次狀態檢查".to_string()),
         "{messages:?}"
     );
     assert!(
-        messages.contains(&"自動檢查已暫停。".to_string()),
+        messages.contains(&"自動檢查已暫停".to_string()),
         "{messages:?}"
     );
     assert!(
-        messages.contains(&"自動檢查已恢復。".to_string()),
+        messages.contains(&"自動檢查已恢復".to_string()),
         "{messages:?}"
     );
     assert!(
@@ -1176,7 +1176,7 @@ async fn starts_handles_authorized_commands_and_can_stop_the_long_polling() {
         messages
             .last()
             .expect("停止訊息應存在")
-            .contains("Twitch Watchdog 已停止"),
+            .contains("twiclaimer 已停止"),
         "{messages:?}"
     );
     {
@@ -1448,7 +1448,7 @@ async fn background_query_failure_replies_and_releases_the_slot() {
                     .iter()
                     .any(|send| {
                         send.chat_id == ALLOWED_CHAT_ID
-                            && send.text == "/points 處理失敗，請稍後再試。"
+                            && send.text == "/points 處理失敗，請稍後再試"
                     })
         })
         .await;
@@ -1596,9 +1596,9 @@ async fn pushes_stream_and_reward_notifications_and_ignores_not_found() {
     assert_eq!(
         messages,
         vec![
-            "🔴 first 已開台".to_string(),
-            "⚫ first 已離線".to_string(),
-            "🎁 first 已領取忠誠點數".to_string(),
+            "first 已開台".to_string(),
+            "first 已離線".to_string(),
+            "first 已領取忠誠點數".to_string(),
         ]
     );
 }
@@ -1768,7 +1768,7 @@ async fn screenshot_command_replies_with_hint_without_active_sessions() {
                     .lock()
                     .expect("lock")
                     .iter()
-                    .any(|send| send.text == "目前沒有正在觀看的頻道可供截圖。")
+                    .any(|send| send.text == "目前沒有正在觀看的頻道可供截圖")
         })
         .await;
     // 舊測試：await harness.bot.stop('test')（先等名額釋放完成）。
@@ -1871,7 +1871,7 @@ async fn points_command_replies_with_hint_without_active_sessions() {
                     .lock()
                     .expect("lock")
                     .iter()
-                    .any(|send| send.text == "目前沒有正在觀看的頻道可查詢忠誠點數。")
+                    .any(|send| send.text == "目前沒有正在觀看的頻道可查詢忠誠點數")
         })
         .await;
     // 舊測試：await harness.bot.stop('test')（先等名額釋放完成）。

@@ -7,7 +7,7 @@
 //! - 長輪詢：`start()` 依舊版順序（`setMyCommands` 失敗只記
 //!   `telegram_command_menu_failed` → 廣播啟動訊息 → 外派 poll 迴圈）。
 //!   `stop()` 取消訊號（舊版 `abortController` 由 [`CancellationToken`] 呈現）、
-//!   等待 poll 迴圈結束後廣播 `Twitch Watchdog 已停止\n原因：<reason>`。
+//!   等待 poll 迴圈結束後廣播 `twiclaimer 已停止\n原因：<reason>`。
 //! - 舊版 `306b4ba`「查詢停頓時保持回應」逐項移植：`/points`／`/screenshot`
 //!   以 `start_query` 外派（名額 [`MAX_ACTIVE_QUERIES`]）
 //!   保留到頁面工作結束；30 秒查詢逾時計時器（`telegram_query_timeout`）；
@@ -427,16 +427,16 @@ impl BotCore {
         if let Some(flight) = flight {
             let _ = flight.await;
         }
-        self.broadcast(&format!("Twitch Watchdog 已停止\n原因：{reason}"), None)
+        self.broadcast(&format!("twiclaimer 已停止\n原因：{reason}"), None)
             .await;
     }
 
     /// 舊版 `notifyStreamStatus(change)`。
     async fn notify_stream_status(&self, change: &StreamStatusChange) {
         let text = if change.is_live {
-            format!("🔴 {} 已開台", change.channel)
+            format!("{} 已開台", change.channel)
         } else {
-            format!("⚫ {} 已離線", change.channel)
+            format!("{} 已離線", change.channel)
         };
         self.broadcast(&text, None).await;
     }
@@ -446,10 +446,10 @@ impl BotCore {
     async fn notify_reward(&self, result: &RewardClaimResult) {
         let text = match result {
             RewardClaimResult::Claimed { channel, .. } => {
-                format!("🎁 {channel} 已領取忠誠點數")
+                format!("{channel} 已領取忠誠點數")
             }
             RewardClaimResult::ClickFailed { channel, .. } => {
-                format!("⚠️ {channel} 忠誠點數領取失敗")
+                format!("{channel} 忠誠點數領取失敗")
             }
             RewardClaimResult::NotFound { .. } => return,
         };
@@ -559,16 +559,16 @@ impl BotCore {
             }
             "check" => {
                 self.command_context.run_check().await?;
-                self.reply(chat_id, "已完成一次狀態檢查。").await?;
+                self.reply(chat_id, "已完成一次狀態檢查").await?;
             }
             "pause" => {
                 self.command_context.pause_checks().await?;
-                self.reply(chat_id, "自動檢查已暫停。").await?;
+                self.reply(chat_id, "自動檢查已暫停").await?;
             }
             "resume" => {
                 // 舊版 resumeChecks() 是同步 void（不會 reject）。
                 self.command_context.resume_checks();
-                self.reply(chat_id, "自動檢查已恢復。").await?;
+                self.reply(chat_id, "自動檢查已恢復").await?;
             }
             "screenshot" => {
                 self.start_query(
@@ -635,7 +635,7 @@ impl BotCore {
                 BotFailure::Config(ConfigWriteError::Validation(validation)) => {
                     validation.message().to_string()
                 }
-                _ => "設定更新失敗，請確認 config.yml 可寫入。".to_string(),
+                _ => "設定更新失敗，請確認 config.yml 可寫入".to_string(),
             };
             self.logger.warn(
                 "telegram_config_update_failed",
@@ -672,7 +672,7 @@ impl BotCore {
         if self.active_queries.load(Ordering::Relaxed) >= MAX_ACTIVE_QUERIES {
             self.reply(
                 chat_id,
-                "查詢仍在處理中，請稍後再試；可用 /status 查看服務狀態。",
+                "查詢仍在處理中，請稍後再試；可用 /status 查看服務狀態",
             )
             .await?;
             return Ok(());
@@ -730,7 +730,7 @@ impl BotCore {
                         Some(&SanitizedValue::Object(fields)),
                     );
                 }
-                let reply = format!("/{command} 處理失敗，請稍後再試。");
+                let reply = format!("/{command} 處理失敗，請稍後再試");
                 if let Err(send_error) = flight_core.api.send_message(&chat_id, &reply, None).await
                 {
                     flight_core.logger.warn(
@@ -758,7 +758,7 @@ impl BotCore {
         let Some(requested_channel) = requested_channel else {
             let active_channels = self.command_context.get_active_channels();
             if active_channels.is_empty() {
-                self.reply(chat_id, "目前沒有正在觀看的頻道可供截圖。")
+                self.reply(chat_id, "目前沒有正在觀看的頻道可供截圖")
                     .await?;
                 return Ok(());
             }
@@ -775,7 +775,7 @@ impl BotCore {
                 sent_count += 1;
             }
             if sent_count == 0 {
-                self.reply(chat_id, "目前沒有正在觀看的頻道可供截圖。")
+                self.reply(chat_id, "目前沒有正在觀看的頻道可供截圖")
                     .await?;
             }
             return Ok(());
@@ -789,7 +789,7 @@ impl BotCore {
                 .iter()
                 .any(|channel| js_lower(channel) == js_lower(requested_channel));
             let text = if active_channels.is_empty() {
-                "目前沒有正在觀看的頻道可供截圖。".to_string()
+                "目前沒有正在觀看的頻道可供截圖".to_string()
             } else if requested_is_active {
                 format!("頻道目前無法截圖：{requested_channel}")
             } else {
@@ -874,7 +874,7 @@ impl BotCore {
         if results.is_empty() {
             let active_channels = self.command_context.get_active_channels();
             let text = if active_channels.is_empty() {
-                "目前沒有正在觀看的頻道可重整。".to_string()
+                "目前沒有正在觀看的頻道可重整".to_string()
             } else {
                 [
                     format!("找不到正在觀看的頻道：{}", requested_channel.unwrap_or("")),
@@ -915,7 +915,7 @@ impl BotCore {
         if results.is_empty() {
             let active_channels = self.command_context.get_active_channels();
             let text = if active_channels.is_empty() {
-                "目前沒有正在觀看的頻道可查詢忠誠點數。".to_string()
+                "目前沒有正在觀看的頻道可查詢忠誠點數".to_string()
             } else {
                 [
                     format!("找不到正在觀看的頻道：{}", requested_channel.unwrap_or("")),
@@ -1060,7 +1060,7 @@ impl BotCore {
     /// 對應舊版 `formatServiceStarted`。
     fn format_service_started(&self) -> String {
         [
-            "Twitch Watchdog 已啟動".to_string(),
+            "twiclaimer 已啟動".to_string(),
             format!("監控頻道：{}", self.config.channels.len()),
             format!(
                 "最大同時觀看：{}",
@@ -1134,7 +1134,7 @@ impl BotCore {
     fn format_refresh_countdown(&self) -> String {
         let statuses = self.command_context.get_refresh_statuses();
         if statuses.is_empty() {
-            return "目前沒有正在觀看的頻道。".to_string();
+            return "目前沒有正在觀看的頻道".to_string();
         }
 
         let mut lines = vec!["重整倒數：".to_string()];
@@ -1312,7 +1312,7 @@ async fn run_query_timer(
                     "command".to_string(),
                     SanitizedValue::String(command.to_string()),
                 )])));
-            let reply = format!("/{command} 處理逾時，請稍後再試；可用 /status 查看服務狀態。");
+            let reply = format!("/{command} 處理逾時，請稍後再試；可用 /status 查看服務狀態");
             if let Err(error) = core.api.send_message(chat_id, &reply, None).await {
                 core.logger
                     .warn("telegram_send_failed", Some(&retry_ms_fields(&error.describe(), 0.0)));
