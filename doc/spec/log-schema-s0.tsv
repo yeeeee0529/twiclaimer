@@ -1,0 +1,23 @@
+browser_console_message	7	warn	browserGeneration:number channel:string columnNumber:number consoleType:string lineNumber:number message:string pageGeneration:number sourceHost:string sourcePath:string
+browser_request_failed	11	warn	browserGeneration:number channel:string endpointCategory:string failureText:string host:string method:string pageGeneration:number path:string resourceType:string
+config_loaded	1	info	channelCount:number maxConcurrentStreams:number
+credential_checked	1	info	hasCookies:string twitchApiConfigured:bool
+page_crashed	23	warn	browserGeneration:number channel:string pageGeneration:number
+page_health_failed	2	warn	channel:string consecutiveFailures:number reason:string
+page_refresh_failed	2	warn	channel:string error:string
+page_refreshed	397	info	channel:string reason:string
+resource_guard_enabled	1	info	browserRecycleMemoryMib:number emergencyMemoryMib:number maxConcurrentStreams:number postRecycleTargetMemoryMib:number sampleIntervalSeconds:number scaleWithStreams:bool warningMemoryMib:number warningResetMemoryMib:number
+reward_claim_failed	1	warn	channel:string checkedAt:string error:string
+reward_claimed	429	info	channel:string claimedAt:string
+runtime_resource_snapshot	339	info	activeChannelCount:number browserPageCount:number browserRecycleInFlight:bool cgroupCpuSystemUsec:number cgroupCpuUsageUsec:number cgroupCpuUserUsec:number cgroupMemoryCurrentBytes:number cgroupMemoryEventsHigh:number cgroupMemoryEventsMax:number cgroupMemoryEventsOom:number cgroupMemoryEventsOomKill:number cgroupMemoryMaxBytes:number cgroupMemoryPeakBytes:number cgroupPidsCurrent:number cgroupPidsMax:number cgroupSwapCurrentBytes:number processCpuSystemUs:number processCpuUserUs:number processExternalBytes:number processHeapUsedBytes:number processMaxRssKb:number processRssBytes:number resourceGuardState:string
+scheduler_stall_watchdog_started	1	info	intervalSeconds:number stallThresholdMs:number
+service_started	1	info	applicationVersion:string browserEngine:string browserGeneration:number browserVersion:string channelCount:number gitCommit:null memoryMaxBytes:number nodeVersion:string pidsMax:number playwrightVersion:string runId:string safeConfigFingerprint:string
+session_page_operation_drain_timeout	1	warn	channel:string reason:string timeoutMs:number
+stream_offline	10	info	channel:string
+stream_online	12	info	channel:string
+stream_playback_optimized	299	info	channel:string muted:bool selectedQuality:string
+telegram_poll_failed	15	warn	errorCategory:string errorClass:string httpStatus:null retryInMs:number
+telegram_send_failed	3	warn	errorCategory:string errorClass:string httpStatus:null retryInMs:number
+twitch_api_token_refreshed	1	info	expiresInSeconds:number
+watch_started	37	info	channel:string url:string
+watch_stopped	35	info	channel:string reason:string
