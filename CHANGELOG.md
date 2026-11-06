@@ -29,6 +29,8 @@ Twitch Watchdog 的 Rust 移植首版。以舊版原始碼為行為依據逐模�
 
 ### 升級步驟（從 twitch-watchdog-docker 切換）
 
+以下假設舊版目錄 `twitch-watchdog-docker` 與本專案目錄 `twiclaimer` 並列在同一個上層目錄。
+
 ```bash
 cd twiclaimer
 docker compose build --build-arg APP_UID=<舊容器的 uid> --build-arg APP_GID=<舊容器的 gid>
