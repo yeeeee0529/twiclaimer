@@ -34,7 +34,8 @@ RUN curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal \
 WORKDIR /src
 COPY . .
 RUN grep -q "channel = \"${RUST_VERSION}\"" rust-toolchain.toml
-RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/src/target \
+# 不掛載 /src/target 快取：陳舊的 thin LTO bitcode 曾使 rustc（LLVM）以 SIGILL 崩潰
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cargo build --release --locked && cp target/release/twiclaimer /usr/local/bin/twiclaimer
 
 FROM build AS test
