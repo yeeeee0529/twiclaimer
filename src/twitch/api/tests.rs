@@ -337,6 +337,39 @@ async fn batches_queries_beyond_100_user_logins_and_keeps_full_order() {
     );
 }
 
+// 回歸測試：同批超過 20 個頻道開台時，每批都要求 first=100（Helix 預設每頁 20 筆），
+// 全部開台頻道都回報為 live
+#[tokio::test]
+async fn requests_full_page_so_more_than_20_live_channels_stay_live() {
+    let channels: Vec<String> = (0..25).map(|index| format!("live_{index}")).collect();
+    let streams: Vec<serde_json::Value> = channels
+        .iter()
+        .map(|channel| {
+            helix_stream(&[
+                ("id", serde_json::json!(format!("id-{channel}"))),
+                ("user_login", serde_json::json!(channel)),
+            ])
+        })
+        .collect();
+    let (transport, calls) = MockTransport::always(MockStep::Respond(json_response(
+        &serde_json::json!({ "data": streams }),
+    )));
+    let client = create_client(transport, recording_logger(), |_| {});
+
+    let statuses = client
+        .get_live_statuses(&channels)
+        .await
+        .expect("getLiveStatuses 應成功");
+
+    let calls = calls.lock().expect("calls lock");
+    assert_eq!(calls.len(), 1);
+    let pairs = query_pairs(&Url::parse(&calls[0].url).expect("URL 應可解析"));
+    assert_eq!(pairs["first"], vec!["100".to_string()]);
+    assert_eq!(pairs["user_login"].len(), 25);
+    assert!(statuses.iter().all(|status| status.is_live));
+    assert_eq!(statuses.len(), 25);
+}
+
 // 原測試：空頻道清單不發送 request
 #[tokio::test]
 async fn does_not_send_request_for_empty_channel_list() {
@@ -719,7 +752,7 @@ async fn assembles_streams_url_from_custom_base_without_trailing_slash() {
     assert_eq!(calls.len(), 1);
     assert_eq!(
         calls[0].url,
-        "https://api.example.com/helix/streams?user_login=streamer"
+        "https://api.example.com/helix/streams?user_login=streamer&first=100"
     );
 }
 
@@ -740,7 +773,7 @@ async fn encodes_user_login_query_with_form_urlencoding() {
     let calls = calls.lock().expect("calls lock");
     assert_eq!(
         calls[0].url,
-        "https://api.twitch.tv/helix/streams?user_login=a+b"
+        "https://api.twitch.tv/helix/streams?user_login=a+b&first=100"
     );
 }
 

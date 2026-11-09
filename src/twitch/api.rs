@@ -685,6 +685,9 @@ impl TwitchApiClient {
 
     /// 對應舊版 URL 組裝：endpoint 複製後以與 `URLSearchParams` 相同的
     /// form-urlencoded 序列化附加 `user_login`（query 以外皆不動）。
+    ///
+    /// Get Streams 預設每頁只回 20 筆；每批最多 100 個 `user_login`，所以明確要求
+    /// `first=100`，讓同批所有開台頻道都在第一頁內，不會被誤判為離線。
     fn build_streams_url(&self, channels: &[String]) -> Url {
         let mut url = self.endpoint.clone();
         {
@@ -692,6 +695,7 @@ impl TwitchApiClient {
             for channel in channels {
                 pairs.append_pair("user_login", channel);
             }
+            pairs.append_pair("first", &TWITCH_HELIX_MAX_USER_LOGINS.to_string());
         }
         url
     }
