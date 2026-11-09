@@ -2465,15 +2465,6 @@ async fn refresh_scheduled_page(this: &Arc<Inner>) -> Result<(), DriverError> {
 // free helpers（舊版 module 層函式與 Windows／欄位建構子）
 // ---------------------------------------------------------------------------
 
-/// flight slot 的種類（health／reward／points 的 [`OnceCell`] 型別不同，以
-/// enum 分派共用程式）。
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum FlightSlotKind {
-    Health,
-    Reward,
-    Points,
-}
-
 /// 取得／登記 flight slot：`Some(existing)` 有進行中的 flight；`None` 表示
 /// 登記權在手（cell 已寫回 slot）。
 fn claim_flight_slot<T: Clone>(

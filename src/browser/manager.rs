@@ -905,14 +905,6 @@ impl Inner {
         .await
     }
 
-    /// 舊版 `restartManually`（exclusive 區排隊 → 本體 → finally 的通知與拋錯）。
-    async fn restart_manually(self: &Arc<Self>) -> Result<(), DriverError> {
-        let slot = self.operation_lock.enqueue();
-        let _guard = slot.acquire().await;
-        let outcome = self.restart_manually_in_exclusive().await;
-        finish_restart_manually(self, outcome).await
-    }
-
     /// 舊版 `startUnlocked`：實際的啟動流程（exclusive 區內呼叫）。
     async fn start_unlocked(self: &Arc<Self>) -> Result<(), DriverError> {
         {
@@ -1115,91 +1107,6 @@ impl Inner {
             )));
         }
         entry
-    }
-
-    /// 舊版 `reattachPageListeners`：重建既有 entry 的六個 listener（沿用同一
-    /// entry 的 generation；舊版程式內沒有呼叫端，照原樣移植）。
-    fn reattach_page_listeners(self: &Arc<Self>, channel: &str, entry: &mut PageEntry) {
-        let adapter = Arc::clone(&entry.adapter);
-        let invalidation_listener =
-            |this: &Arc<Self>, reason: BrowserInvalidationReason| -> Box<dyn Fn() + Send + Sync> {
-                let this = Arc::clone(this);
-                let channel = channel.to_string();
-                let adapter = Arc::clone(&adapter);
-                let browser_generation = entry.browser_generation;
-                let page_generation = entry.page_generation;
-                Box::new(move || {
-                    let this = Arc::clone(&this);
-                    let adapter = Arc::clone(&adapter);
-                    let channel = channel.clone();
-                    tokio::spawn(async move {
-                        this.handle_page_invalidation(
-                            &channel,
-                            adapter,
-                            browser_generation,
-                            page_generation,
-                            reason,
-                        )
-                        .await;
-                    });
-                })
-            };
-        entry.unsubscribes.clear();
-        entry
-            .unsubscribes
-            .push(entry.adapter.on_crash(invalidation_listener(
-                self,
-                BrowserInvalidationReason::PageCrashed,
-            )));
-        entry
-            .unsubscribes
-            .push(entry.adapter.on_close(invalidation_listener(
-                self,
-                BrowserInvalidationReason::PageClosed,
-            )));
-        {
-            let this = Arc::clone(self);
-            let channel = channel.to_string();
-            entry
-                .unsubscribes
-                .push(entry.adapter.on_popup(Box::new(move |popup| {
-                    let this = Arc::clone(&this);
-                    let channel = channel.clone();
-                    tokio::spawn(async move {
-                        this.close_unexpected_popup(&channel, popup).await;
-                    });
-                })));
-        }
-        let generations = (entry.browser_generation, entry.page_generation);
-        {
-            let this = Arc::clone(self);
-            let channel = channel.to_string();
-            entry
-                .unsubscribes
-                .push(entry.adapter.on_request_failed(Box::new(
-                    move |diagnostic: &BrowserRequestFailureDiagnostic| {
-                        this.log_request_failure(&channel, generations, diagnostic);
-                    },
-                )));
-        }
-        {
-            let this = Arc::clone(self);
-            let channel = channel.to_string();
-            entry.unsubscribes.push(entry.adapter.on_response(Box::new(
-                move |diagnostic: &BrowserHttpResponseDiagnostic| {
-                    this.log_http_response(&channel, generations, diagnostic);
-                },
-            )));
-        }
-        {
-            let this = Arc::clone(self);
-            let channel = channel.to_string();
-            entry.unsubscribes.push(entry.adapter.on_console(Box::new(
-                move |diagnostic: &BrowserConsoleDiagnostic| {
-                    this.log_console_message(&channel, generations, diagnostic);
-                },
-            )));
-        }
     }
 
     /// 舊版 `closeUnexpectedPopup`：popup 立即關閉；成功記 `browser_popup_blocked`。
