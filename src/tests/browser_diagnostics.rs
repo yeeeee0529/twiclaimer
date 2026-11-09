@@ -212,6 +212,13 @@ async fn run_diagnostics_flow(
         "應收到 bootstrap error 的 console 診斷"
     );
 
+    // 成功與失敗的請求都結束後，請求對照表不應殘留紀錄（loadingFinished 會移除）。
+    assert!(
+        eventually(POLL_DEADLINE, || page.shared.tracked_request_count() == 0).await,
+        "請求結束後對照表應清空，殘留 {} 筆",
+        page.shared.tracked_request_count()
+    );
+
     // 逐欄位斷言（照舊 e2e 的 `toMatchObject`）。本機伺服器多了文件本身的
     // response，故以 url 找 failing-api（舊版為 `responses[0]`）。
     let failures = request_failures.lock().unwrap().clone();

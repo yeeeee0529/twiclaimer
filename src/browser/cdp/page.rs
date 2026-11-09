@@ -48,6 +48,9 @@ const MAX_HOST_LENGTH: usize = 128;
 const MAX_PATH_LENGTH: usize = 256;
 const MAX_MESSAGE_LENGTH: usize = 500;
 const MAX_FAILURE_TEXT_LENGTH: usize = 300;
+/// 請求對照表的上限：終止事件（loadingFinished／loadingFailed）是可丟棄的診斷事件，
+/// 遺失時對照不會被移除；超過上限就整批清除（只影響進行中請求的診斷輸出）。
+const MAX_TRACKED_REQUESTS: usize = 1024;
 
 /// `browser-diagnostics.ts` 的 `REDACTED_URL`。
 const REDACTED_URL: &str = "[REDACTED]";
@@ -190,6 +193,16 @@ struct NetworkState {
     paused: HashMap<String, String>,
     /// 已嘗試提供認證的 interceptionId（`_attemptedAuthentications`）。
     attempted_auth: HashSet<String>,
+}
+
+impl NetworkState {
+    /// 登記（或覆寫）請求對照；新請求會讓表超過上限時先整批清除。
+    fn track_request(&mut self, network_id: String, record: RequestRecord) {
+        if !self.requests.contains_key(&network_id) && self.requests.len() >= MAX_TRACKED_REQUESTS {
+            self.requests.clear();
+        }
+        self.requests.insert(network_id, record);
+    }
 }
 
 /// 頁面的共用狀態（事件泵是唯一寫入者；API 端以 watch 等待）。
@@ -811,6 +824,7 @@ impl PageShared {
             // 診斷事件（§7.5）：網路三件套與 console（含子 session 事件泵進來者）。
             "Network.requestWillBeSent" => PageShared::on_request_will_be_sent(page, &event.params),
             "Network.responseReceived" => PageShared::on_response_received(page, &event.params),
+            "Network.loadingFinished" => PageShared::on_loading_finished(page, &event.params),
             "Network.loadingFailed" => PageShared::on_loading_failed(page, &event.params),
             "Fetch.requestPaused" => PageShared::on_request_paused(page, &event.params),
             "Fetch.authRequired" => PageShared::on_auth_required(page, &event.params),
@@ -949,7 +963,7 @@ impl PageShared {
                 });
             }
             // 登記（或以 redirect 的新請求覆寫）。
-            network.requests.insert(
+            network.track_request(
                 network_id.clone(),
                 RequestRecord {
                     url: request
@@ -1017,6 +1031,28 @@ impl PageShared {
                 .to_string(),
             graphql_operation_names: extract_graph_ql_operation_names(record.post_data.as_deref()),
         });
+    }
+
+    /// 目前仍在對照表中的請求數（測試觀測用）。
+    #[cfg(test)]
+    pub(crate) fn tracked_request_count(&self) -> usize {
+        self.network
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .requests
+            .len()
+    }
+
+    /// `Network.loadingFinished`：請求成功結束，移除對照（不派診斷）。
+    fn on_loading_finished(page: &Arc<PageShared>, params: &Value) {
+        let Some(network_id) = params.get("requestId").and_then(Value::as_str) else {
+            return;
+        };
+        page.network
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .requests
+            .remove(network_id);
     }
 
     /// `Network.loadingFailed`：派 requestfailed 診斷（§7.5）。
@@ -2291,4 +2327,39 @@ async fn init_frame_session(page: &Arc<PageShared>, session_id: &str) {
 /// 頁面 adapter（對應舊版 `PlaywrightBrowserPageAdapter` 的 page 側）。
 pub(crate) struct PageAdapter {
     pub(crate) shared: Arc<PageShared>,
+}
+
+#[cfg(test)]
+mod network_state_tests {
+    use super::{MAX_TRACKED_REQUESTS, NetworkState, RequestRecord};
+
+    fn record(url: &str) -> RequestRecord {
+        RequestRecord {
+            url: url.to_string(),
+            method: "GET".to_string(),
+            resource_type: "other".to_string(),
+            post_data: None,
+        }
+    }
+
+    #[test]
+    fn tracked_requests_stay_bounded() {
+        let mut network = NetworkState::default();
+        for index in 0..(MAX_TRACKED_REQUESTS * 3) {
+            network.track_request(format!("id-{index}"), record("https://example.com/"));
+            assert!(network.requests.len() <= MAX_TRACKED_REQUESTS);
+        }
+    }
+
+    #[test]
+    fn overwriting_existing_request_does_not_clear() {
+        let mut network = NetworkState::default();
+        for index in 0..MAX_TRACKED_REQUESTS {
+            network.track_request(format!("id-{index}"), record("https://example.com/"));
+        }
+        // redirect 以同一 networkId 覆寫：不算新請求，不觸發清除。
+        network.track_request("id-0".to_string(), record("https://example.com/next"));
+        assert_eq!(network.requests.len(), MAX_TRACKED_REQUESTS);
+        assert_eq!(network.requests["id-0"].url, "https://example.com/next");
+    }
 }
