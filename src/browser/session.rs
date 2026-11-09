@@ -1246,9 +1246,12 @@ impl Inner {
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             claim_flight_slot(&mut state.reload_flight, Arc::clone(&created))
         };
-        if let Some(existing) = existing {
+        if existing.is_some() {
+            // 呼叫端已持有 page operation 佇列，既有的 reload 必定排在佇列後方等待；
+            // 在這裡等它會形成循環等待（它等我們釋放佇列）。直接略過，
+            // 排隊的 reload 會在佇列釋放後照常執行。
             self.log_maintenance_skipped("reload", "reload_already_queued");
-            return existing.take().await;
+            return Ok(());
         }
         let result = Inner::run_page_reload(self, page, reason).await;
         {

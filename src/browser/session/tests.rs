@@ -137,6 +137,8 @@ struct MockPageBehaviors {
     screenshot_implementation: Option<MockScreenshotSource>,
     /// 舊測試 `input.contentWarningClickError`。
     content_warning_click_error: Option<DriverError>,
+    /// 健康評估前等待的閘門（重現 page operation 交錯時序的回歸測試用）。
+    evaluate_gate: Option<MockNavigationSource>,
 }
 
 /// mock page 的共用狀態（Rust 的 Mutex／Atomic 對應舊 mock 的 closure 變數）。
@@ -334,6 +336,10 @@ impl SessionPage for MockPage {
         _fn_declaration: &str,
         _arg: Option<Value>,
     ) -> Result<Value, DriverError> {
+        let gate = self.shared.behaviors.lock().unwrap().evaluate_gate.clone();
+        if let Some(gate) = gate {
+            gate().await?;
+        }
         let marker = self.shared.marker();
         Ok(json!({
             "loginRequired": marker == Some(HealthMarker::LoginRequired),
@@ -365,6 +371,10 @@ impl SessionPage for MockPage {
 impl MockPage {
     fn set_marker(&self, marker: Option<HealthMarker>) {
         *self.shared.marker.lock().unwrap() = marker;
+    }
+
+    fn set_evaluate_gate(&self, gate: Option<MockNavigationSource>) {
+        self.shared.behaviors.lock().unwrap().evaluate_gate = gate;
     }
 
     fn set_side_nav_expanded(&self, expanded: bool) {
@@ -1913,6 +1923,82 @@ async fn login_reasons_skip_reload_and_trigger_threshold_failure() {
         )
         .await;
     }
+}
+
+// 回歸測試：健康檢查持有 page operation 佇列時，手動 reload 已登記 flight 並排在佇列後方；
+// 健康檢查判定要 reload 時必須略過，而不是等待那個排隊中的 reload（循環等待）。
+#[tokio::test(start_paused = true)]
+async fn health_reload_skips_queued_manual_reload_without_deadlock() {
+    let page = create_mock_page(MockPageInput {
+        marker: Some(HealthMarker::LiveContent),
+        ..MockPageInput::default()
+    });
+    let manager = create_browser_manager(&page);
+    let logger = MockLogger::new();
+    let parts =
+        SessionParts::new(&page, create_reward_claimer(), &manager).with_logger(logger.clone());
+    let session = parts.build();
+    session.start().await.unwrap();
+    let reloads_before = page.reload_calls();
+
+    // 健康評估卡在閘門上（此時健康檢查已持有 page operation 佇列）。
+    let entered = Arc::new(AtomicBool::new(false));
+    let (release_tx, release_rx) = oneshot::channel::<()>();
+    let release_rx = Arc::new(Mutex::new(Some(release_rx)));
+    let gate: MockNavigationSource = {
+        let entered = Arc::clone(&entered);
+        Arc::new(move || {
+            entered.store(true, Ordering::SeqCst);
+            let receiver = release_rx.lock().unwrap().take();
+            Box::pin(async move {
+                if let Some(receiver) = receiver {
+                    let _ = receiver.await;
+                }
+                Ok(())
+            })
+        })
+    };
+    page.set_marker(Some(HealthMarker::Offline));
+    page.set_evaluate_gate(Some(gate));
+
+    let health = {
+        let session = session.clone();
+        tokio::spawn(async move { session.check_health().await })
+    };
+    eventually_assert(
+        || entered.load(Ordering::SeqCst),
+        "health check reaches evaluate",
+    )
+    .await;
+
+    // 手動 reload 登記 flight 後排到佇列後方。
+    let refresh = {
+        let session = session.clone();
+        tokio::spawn(async move { session.refresh_now().await })
+    };
+    for _ in 0..20 {
+        tokio::task::yield_now().await;
+    }
+    page.set_evaluate_gate(None);
+    let _ = release_tx.send(());
+
+    let result = tokio::time::timeout(Duration::from_secs(30), health)
+        .await
+        .expect("health check must not wait for the queued reload")
+        .unwrap();
+    assert!(!result.healthy);
+    let refreshed = tokio::time::timeout(Duration::from_secs(30), refresh)
+        .await
+        .expect("queued manual reload completes after the health check")
+        .unwrap()
+        .unwrap();
+    assert!(refreshed);
+    assert_eq!(page.reload_calls(), reloads_before + 1);
+    assert!(logger.called_with(
+        LogLevel::Debug,
+        "session_maintenance_skipped",
+        json!({"channel": CHANNEL, "task": "reload", "reason": "reload_already_queued"}),
+    ));
 }
 
 // 原測試：連續三次失敗後停止 timers、關閉 page 並進入 failed
