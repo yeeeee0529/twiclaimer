@@ -248,7 +248,7 @@ docker compose down
 
 ### 日誌
 
-服務日誌是每行一筆的 JSON（JSON Lines），輸出到 stdout，可用 Docker logs 查看與保存：
+服務日誌是每行一筆的 JSON（JSON Lines），輸出到 stdout，可用 Docker logs 查看與保存。日誌由背景執行緒寫出；stdout 被卡住時，服務不會停擺，但累積超過 1024 行後會丟棄新的日誌，恢復後補記一筆 `log_lines_dropped`（含丟棄數量）：
 
 ```bash
 docker compose logs -f twitch-watchdog
@@ -378,6 +378,8 @@ User ID 同樣必須是加引號的數字 snowflake ID。私訊只接受清單�
 | `/channels_set channels:頻道一,頻道二` | 取代完整頻道清單 |
 | `/max_streams count:數量` | 調整最大同時觀看數 |
 | `/screenshot [channel:頻道名稱]` | 回傳觀看中頻道的截圖 |
+
+`/screenshot`、`/points`、`/refresh_now`、`/check` 在背景執行，不會阻塞其他指令；同時最多處理四筆，超過時會回覆「目前處理中的指令過多，請稍後再試」。其他指令（含設定變更）依收到的順序處理。
 
 主動推播的內容與 Telegram 相同。Discord bot token 具有管理能力，不得提交 Git 或貼到任何公開位置。
 

@@ -248,7 +248,7 @@ docker compose down
 
 ### Logs
 
-Service logs are JSON Lines on stdout. View or retain them through Docker logs:
+Service logs are JSON Lines on stdout. View or retain them through Docker logs. A background thread writes the logs, so a blocked stdout does not stall the service; once more than 1024 lines are queued, new lines are dropped and a `log_lines_dropped` entry with the count is written after output recovers:
 
 ```bash
 docker compose logs -f twitch-watchdog
@@ -378,6 +378,8 @@ The commands match Telegram's. Arguments are passed as `name:value`:
 | `/channels_set channels:a,b` | Replace the whole channel list |
 | `/max_streams count:number` | Set the maximum concurrent streams |
 | `/screenshot [channel:name]` | Screenshots of watched channels |
+
+`/screenshot`, `/points`, `/refresh_now`, and `/check` run in the background and do not block other commands. At most four run at once; extra requests get a busy reply. Other commands, including configuration changes, are handled in the order received.
 
 Proactive pushes are the same as on Telegram. A Discord bot token grants management capability. Do not commit it or post it publicly.
 

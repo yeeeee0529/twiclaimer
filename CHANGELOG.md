@@ -6,6 +6,13 @@
 
 - 新增 GitHub Actions（`.github/workflows/docker-image.yml`）：push 到 `main` 先跑 Docker test stage，通過後才把正式 image 發布到 `ghcr.io/yeeeee0529/twiclaimer`（`latest`＋commit SHA，`APP_UID`／`APP_GID` = 1001）。`docker-compose.yml` 的 image 可由 `TWICLAIMER_IMAGE` 覆寫，預設仍為 `twiclaimer:local`。伺服器用 `docker compose pull` 取代本機編譯。
 - `Dockerfile`：release build 不再掛載 `/src/target` 快取。
+- 修正健康檢查與手動／定時重整互相等待，造成該頻道頁面操作全部卡住。
+- 修正成功的網路請求紀錄未移除，記憶體隨觀看時間累積；請求對照表另設 1024 筆上限。
+- 修正根層為 flow mapping（`{...}`）的 `config.yml` 在 Bot 更新設定後被寫成無效 YAML；寫回前會重新解析，無效時不寫檔。
+- Discord：`/screenshot`、`/points`、`/refresh_now`、`/check` 改在背景執行（同時最多四筆，超過回覆忙碌訊息），不再阻塞後續指令與停止訊號；其他指令仍依序處理。
+- 日誌改由背景執行緒寫入 stdout（佇列 1024 行）；stdout 卡住時服務不再停擺，滿時丟棄新行並補記 `log_lines_dropped`。
+- 修正 Twitch 批次查詢未設定 `first=100`，同批超過 20 個頻道開台時其餘頻道被判為離線。
+- 修正啟用資源阻擋時 `Network.requestWillBeSent` 被丟棄，導致被攔截的請求一直暫停。
 
 ## 0.1.0 (2026-11-04)
 
