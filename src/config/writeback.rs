@@ -37,6 +37,8 @@ use crate::logging::redact::js_number_to_string;
 const SYNTAX_ERROR: &str = "無法更新含有語法錯誤的設定檔";
 /// 舊版 `persist` 的根節點錯誤訊息（不含前綴）。
 const ROOT_NOT_MAP: &str = "設定檔根節點必須是物件";
+/// 寫回結果重新解析失敗時的訊息（不含前綴）；此時不寫檔。
+const WRITEBACK_INVALID: &str = "無法產生有效的設定檔內容，未寫回";
 
 /// 舊版 `RuntimeWatchConfig`（`freezeConfig` 後的值）。
 #[derive(Clone, Debug, PartialEq)]
@@ -400,6 +402,17 @@ pub(crate) fn build_persisted_content(
         })
         .collect();
     let content = assemble_content(text, plan.replacements);
+    // 寫入前重新解析一次：取代規則沒涵蓋到的寫法若產生無效 YAML，回報錯誤而不寫壞原檔。
+    let reparsed_root_is_map = compose_with_ranges(&content).is_ok_and(|reparsed| {
+        reparsed
+            .root
+            .is_some_and(|root| matches!(reparsed.nodes[root].kind, RangeNodeKind::Map { .. }))
+    });
+    if !reparsed_root_is_map {
+        return Err(ConfigWriteError::Parse(ConfigParseError::new(
+            WRITEBACK_INVALID,
+        )));
+    }
     // 檔尾沒有換行時補上一個（換行風格沿用原檔，照舊版 String(document) 恆以
     // 換行結尾的行為）。
     let content = if content.ends_with('\n') {
@@ -857,8 +870,8 @@ fn plan_replacements(
     let root = composed
         .root
         .ok_or_else(|| ConfigWriteError::Parse(ConfigParseError::new(ROOT_NOT_MAP)))?;
-    let entries = match &composed.nodes[root].kind {
-        RangeNodeKind::Map { entries, .. } => entries,
+    let (entries, root_flow) = match &composed.nodes[root].kind {
+        RangeNodeKind::Map { entries, flow, .. } => (entries, *flow),
         _ => {
             return Err(ConfigWriteError::Parse(ConfigParseError::new(ROOT_NOT_MAP)));
         }
@@ -885,9 +898,15 @@ fn plan_replacements(
             config,
             key_index,
             value_index,
+            root_flow,
             newline,
             &mut plan,
         );
+    } else if root_flow {
+        appends.push(format!(
+            "channels: {}",
+            flow_sequence_text(&config.channels)
+        ));
     } else {
         appends.push(missing_channels_text(config, newline));
     }
@@ -904,11 +923,31 @@ fn plan_replacements(
             newline,
             &mut plan,
         );
+    } else if root_flow {
+        appends.push(format!(
+            "max_concurrent_streams: {}",
+            js_number_to_string(config.max_concurrent_streams)
+        ));
     } else {
         appends.push(format!(
             "max_concurrent_streams: {}{newline}",
             js_number_to_string(config.max_concurrent_streams)
         ));
+    }
+
+    // 根層是 flow mapping（`{...}`）：缺少的鍵以行內格式插在結尾 `}` 之前。
+    if root_flow {
+        if !appends.is_empty() {
+            let (position, text) = flow_mapping_insertion(
+                source,
+                &composed.nodes,
+                &composed.nodes[root],
+                entries,
+                &appends,
+            )?;
+            plan.replacements.push((position, position, text));
+        }
+        return Ok(plan);
     }
 
     // 附加的鍵放在檔尾（同一個零寬取代範圍）；檔尾沒有換行時先補一個。
@@ -923,6 +962,51 @@ fn plan_replacements(
         plan.replacements.push((start, start, text));
     }
     Ok(plan)
+}
+
+/// 在根層 flow mapping 結尾 `}` 之前插入缺少的鍵：已有項目且最後沒有逗號時
+/// 先補 `, `；結尾已有逗號（`{a: 1,}`）或沒有項目時直接接上。
+fn flow_mapping_insertion(
+    source: &str,
+    nodes: &[RangeNode],
+    root: &RangeNode,
+    entries: &[(usize, usize)],
+    appends: &[String],
+) -> Result<(usize, String), ConfigWriteError> {
+    // 結尾有逗號時（`{a: 1,}`），解析器回報的範圍會停在逗號上，所以從範圍終點的
+    // 前一個位元組往後找實際的 `}`（找錯時由寫入前的重新解析攔下）。
+    let search_from = root.span.1.saturating_sub(1);
+    let close = source
+        .get(search_from..)
+        .and_then(|rest| rest.find('}'))
+        .map(|offset| search_from + offset);
+    let Some(close) = close else {
+        return Err(ConfigWriteError::Parse(ConfigParseError::new(
+            WRITEBACK_INVALID,
+        )));
+    };
+    // 最後一個項目結尾（沒有項目時從 `{` 之後）到 `}` 之間是否已有逗號（略過註解）。
+    let tail_start = entries
+        .iter()
+        .map(|&(key, value)| nodes[key].span.1.max(nodes[value].span.1))
+        .max()
+        .unwrap_or(root.span.0 + 1)
+        .min(close);
+    let has_trailing_comma = source[tail_start..close].lines().any(|line| {
+        let code = line.find(" #").map_or(line, |index| &line[..index]);
+        let code = if code.trim_start().starts_with('#') {
+            ""
+        } else {
+            code
+        };
+        code.contains(',')
+    });
+    let separator = if entries.is_empty() || has_trailing_comma {
+        ""
+    } else {
+        ", "
+    };
+    Ok((close, format!("{separator}{}", appends.join(", "))))
 }
 
 /// `channels` 鍵不存在時的附加文字：block sequence，縮排為鍵的欄位 + 2
@@ -1016,13 +1100,27 @@ fn block_sequence_after_key_text(channels: &[String], key_indent: usize, newline
     format!(":{newline}{items}")
 }
 
+/// flow sequence 文字 `[a, b]`。
+fn flow_sequence_text(channels: &[String]) -> String {
+    format!(
+        "[{}]",
+        channels
+            .iter()
+            .map(|name| channel_scalar_text(name))
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
+}
+
 /// `channels` 的取代規劃。
+#[allow(clippy::too_many_arguments)] // 規劃需要原文、解析結果與兩個節點索引；拆結構體反而難讀
 fn plan_channels_replacement(
     source: &str,
     composed: &Composed,
     config: &RuntimeWatchConfig,
     key_index: usize,
     value_index: usize,
+    root_flow: bool,
     newline: &str,
     plan: &mut PersistPlan,
 ) {
@@ -1039,16 +1137,20 @@ fn plan_channels_replacement(
         }
         RangeNodeKind::Seq { flow: true, .. } => {
             // flow sequence：取代 `[` 到 `]`，輸出 `[a, b]`。
-            let text = format!(
-                "[{}]",
-                config
-                    .channels
-                    .iter()
-                    .map(|name| channel_scalar_text(name))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            );
-            plan.replacements.push((span_start, span_end, text));
+            plan.replacements
+                .push((span_start, span_end, flow_sequence_text(&config.channels)));
+        }
+        _ if root_flow => {
+            // 根層 flow mapping 內不能放 block sequence：換掉整個值節點，輸出 `: [a, b]`。
+            // 範圍從鍵的結尾開始（吃掉 `:` 與其後的 anchor／tag）。
+            let range_end =
+                if span_start == span_end && source.as_bytes().get(span_end) == Some(&b':') {
+                    span_end + 1
+                } else {
+                    span_end.max(key_end)
+                };
+            let text = format!(": {}", flow_sequence_text(&config.channels));
+            plan.replacements.push((key_end, range_end, text));
         }
         _ => {
             // 其他值（標量、alias、映射、空值）：換掉整個節點，輸出 block sequence，

@@ -764,6 +764,41 @@ fn missing_keys_appended_at_end() {
     );
 }
 
+/// 根層是 flow mapping（`{...}`）：缺少的鍵以行內格式插在結尾 `}` 之前，
+/// 結果必須仍是有效 YAML。
+#[test]
+fn flow_mapping_root_inserts_missing_keys_inside_braces() {
+    assert_written(
+        "{channels: [a], log_level: info}\n",
+        "{channels: [b], log_level: info, max_concurrent_streams: 2}\n",
+    );
+    assert_written(
+        "{log_level: info}\n",
+        "{log_level: info, channels: [b], max_concurrent_streams: 2}\n",
+    );
+    assert_written("{}\n", "{channels: [b], max_concurrent_streams: 2}\n");
+    // 結尾已有逗號：不再補逗號。
+    assert_written(
+        "{channels: [a],}\n",
+        "{channels: [b],max_concurrent_streams: 2}\n",
+    );
+    // 多行 flow mapping：插在 `}` 之前。
+    assert_written(
+        "{\n  channels: [a],\n  log_level: info\n}\n",
+        "{\n  channels: [b],\n  log_level: info\n, max_concurrent_streams: 2}\n",
+    );
+    // 註解裡的逗號不算結尾逗號。
+    assert_written(
+        "{\n  channels: [a] # x, y\n}\n",
+        "{\n  channels: [b] # x, y\n, max_concurrent_streams: 2}\n",
+    );
+    // channels 不是序列：在 flow mapping 內改用行內序列。
+    assert_written(
+        "{channels: 5, max_concurrent_streams: 1}\n",
+        "{channels: [b], max_concurrent_streams: 2}\n",
+    );
+}
+
 /// 換行風格沿用原檔（CRLF）；檔尾沒有換行時補 CRLF。
 #[test]
 fn crlf_newline_style_is_preserved() {
