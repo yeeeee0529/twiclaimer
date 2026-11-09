@@ -186,7 +186,9 @@ fn diagnostic_event_classification() {
     let mut router = Router::new();
     let _rx = router.register_session("s1");
     for method in [
-        "Network.requestWillBeSent",
+        "Network.responseReceived",
+        "Network.loadingFinished",
+        "Network.loadingFailed",
         "Log.entryAdded",
         "Runtime.consoleAPICalled",
     ] {
@@ -199,6 +201,20 @@ fn diagnostic_event_classification() {
         );
     }
     assert_eq!(router.dropped_diagnostics("s1"), Some(0));
+}
+
+#[test]
+fn request_will_be_sent_is_not_droppable() {
+    // 攔截配對需要 requestWillBeSent：即使 channel 滿了也不可丟棄，交給呼叫端 await。
+    let mut router = Router::new();
+    let _rx = router.register_session("s1");
+    let outcome = router
+        .handle_message(r#"{"sessionId":"s1","method":"Network.requestWillBeSent","params":{}}"#);
+    assert_eq!(outcome.lifecycle_events.len(), 1);
+    assert_eq!(
+        outcome.lifecycle_events[0].method,
+        "Network.requestWillBeSent"
+    );
 }
 
 // ===== Connection：讀寫 task 接線 =====

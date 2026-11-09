@@ -671,8 +671,11 @@ async fn write_loop<W: AsyncWrite + Unpin>(
 }
 
 /// 診斷事件：滿了可以丟棄（§7.3.2）。
+///
+/// `Network.requestWillBeSent` 例外：請求攔截要它與 `Fetch.requestPaused` 配對才會
+/// continue／fail，丟棄會讓被暫停的請求永遠卡住，所以走不可丟棄的通道。
 fn is_diagnostic_event(method: &str) -> bool {
-    method.starts_with("Network.")
+    (method.starts_with("Network.") && method != "Network.requestWillBeSent")
         || method == "Log.entryAdded"
         || method == "Runtime.consoleAPICalled"
 }
