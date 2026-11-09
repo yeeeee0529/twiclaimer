@@ -377,6 +377,8 @@ struct FakeSharedContext {
     points_override: Mutex<Option<Vec<SessionChannelPointsResult>>>,
     set_channels_calls: Mutex<Vec<Vec<String>>>,
     set_max_concurrent_streams_calls: Mutex<Vec<f64>>,
+    /// 設定時 `capture_screenshot` 先等到取得一個 permit（模擬慢速截圖）。
+    screenshot_gate: Mutex<Option<Arc<tokio::sync::Semaphore>>>,
 }
 
 /// fake 的 `BotCommandContext`（行為照舊測試 harness）。
@@ -398,6 +400,7 @@ impl FakeCommandContext {
                 points_override: Mutex::new(None),
                 set_channels_calls: Mutex::new(Vec::new()),
                 set_max_concurrent_streams_calls: Mutex::new(Vec::new()),
+                screenshot_gate: Mutex::new(None),
             }),
         })
     }
@@ -501,6 +504,10 @@ impl BotCommandContext for FakeCommandContext {
             .expect("lock")
             .push(channel.clone());
         self.shared.notify.notify_one();
+        let gate = self.shared.screenshot_gate.lock().expect("lock").clone();
+        if let Some(gate) = gate {
+            gate.acquire().await.expect("gate open").forget();
+        }
         Ok(Some(SessionScreenshot {
             image: format!("screenshot:{channel}").into_bytes(),
             channel,
@@ -1556,4 +1563,64 @@ async fn continues_to_handle_interactions_after_transport_issue() {
         *harness.context.shared.resume_count.lock().expect("lock"),
         1
     );
+}
+
+// 回歸測試：慢速指令執行中，接收迴圈仍立即處理後續指令；慢速指令同時執行數
+// 已滿時，新的慢速指令立即收到忙碌回覆；釋放後慢速指令照常完成。
+#[tokio::test]
+async fn slow_commands_do_not_block_other_interactions_and_overflow_gets_busy_reply() {
+    let harness = create_harness(HarnessDiscordOptions::default());
+    let gate = Arc::new(tokio::sync::Semaphore::new(0));
+    *harness.context.shared.screenshot_gate.lock().expect("lock") = Some(Arc::clone(&gate));
+
+    harness.bot.start().await.expect("start 應成功");
+
+    // 佔滿 4 個慢速名額（截圖卡在 gate 上）。
+    for id in 0..4u64 {
+        harness
+            .feed_interaction(100 + id, "screenshot", Some("first"))
+            .await;
+    }
+    harness
+        .context
+        .wait_for(|shared| len(&shared.capture_screenshot_calls) == 4)
+        .await;
+
+    // 後續的一般指令不被卡住。
+    harness.feed_interaction(200, "pause", None).await;
+    harness
+        .api
+        .wait_for(|shared| {
+            shared
+                .send_interaction_response
+                .lock()
+                .expect("lock")
+                .iter()
+                .any(|(.., text)| text == "自動檢查已暫停")
+        })
+        .await;
+
+    // 第 5 個慢速指令：立即回覆忙碌，不呼叫截圖。
+    harness
+        .feed_interaction(300, "screenshot", Some("first"))
+        .await;
+    harness
+        .api
+        .wait_for(|shared| {
+            shared
+                .send_interaction_response
+                .lock()
+                .expect("lock")
+                .iter()
+                .any(|(id, _, text)| id == "300" && text == "目前處理中的指令過多，請稍後再試")
+        })
+        .await;
+    assert_eq!(len(&harness.context.shared.capture_screenshot_calls), 4);
+
+    // 放行：卡住的 4 個截圖照常送出。
+    gate.add_permits(4);
+    harness
+        .api
+        .wait_for(|shared| len(&shared.send_interaction_photo) == 4)
+        .await;
 }

@@ -510,6 +510,17 @@ impl BotCore {
         Ok(())
     }
 
+    /// 慢速指令同時執行數已滿：未授權者照常回拒絕訊息，其餘回覆忙碌訊息。
+    async fn reply_busy(&self, interaction: &Interaction) -> Result<(), BotFailure> {
+        if interaction.kind != DISCORD_APPLICATION_COMMAND_INTERACTION {
+            return Ok(());
+        }
+        if self.authorize_interaction(interaction).is_err() {
+            return self.handle_interaction(interaction).await;
+        }
+        self.reply(interaction, BUSY_REPLY).await
+    }
+
     /// 對應舊版 `authorizeInteraction`。
     fn authorize_interaction(&self, interaction: &Interaction) -> Result<(), InteractionDenial> {
         // 舊版 `interaction.guild_id === undefined` → 直接訊息（DM）路徑；
@@ -1148,11 +1159,19 @@ impl DiscordBot for DefaultDiscordBot {
 ///
 /// 迴圈結束條件（§7.8：重大錯誤結束接收迴圈並記 `discord_gateway_error`，
 /// 不影響常駐服務）：串流結束（重大關閉）或自己要求的 close 已呈現。
+///
+/// 接收迴圈本身不等指令執行完，才能在三秒內接住後續 interaction 與停止訊號：
+/// 慢速指令（[`is_slow_command`]）交給背景任務，同時最多
+/// [`MAX_CONCURRENT_SLOW_COMMANDS`] 個，超過時回覆忙碌訊息；其餘指令（含設定變更）
+/// 交給單一工作者依收到的順序處理。
 async fn run_receive_loop(
     core: Arc<BotCore>,
     mut stop_rx: tokio::sync::watch::Receiver<Option<String>>,
 ) {
     let mut gateway = (core.gateway_factory)();
+    let slow_permits = Arc::new(tokio::sync::Semaphore::new(MAX_CONCURRENT_SLOW_COMMANDS));
+    let (ordered_tx, ordered_rx) = tokio::sync::mpsc::channel(ORDERED_QUEUE_CAPACITY);
+    tokio::spawn(run_ordered_worker(Arc::clone(&core), ordered_rx));
     // 我們自己要求的 close（stop 旗標）成立後才可能在這個旗標下結束。
     let mut closing = false;
     loop {
@@ -1192,14 +1211,69 @@ async fn run_receive_loop(
                     }
                 }
                 Some(GatewayItem::Interaction(interaction)) => {
-                    // 舊版 message listener 的 catch：處理失敗記
-                    // discord_gateway_message_failed。
-                    if core.handle_interaction(&interaction).await.is_err() {
-                        core.logger.warn("discord_gateway_message_failed", None);
-                    }
+                    let slow = parse_interaction_command(&interaction)
+                        .is_some_and(|parsed| is_slow_command(&parsed.command));
+                    let job = if slow {
+                        match Arc::clone(&slow_permits).try_acquire_owned() {
+                            Ok(permit) => {
+                                let core = Arc::clone(&core);
+                                tokio::spawn(async move {
+                                    let _permit = permit;
+                                    handle_interaction_logged(&core, &interaction).await;
+                                });
+                                continue;
+                            }
+                            Err(_) => OrderedJob::Busy(interaction),
+                        }
+                    } else {
+                        OrderedJob::Handle(interaction)
+                    };
+                    // 工作者只在接收迴圈結束後才停；佇列滿時在此等候（背壓）。
+                    let _ = ordered_tx.send(job).await;
                 }
             }
         }
+    }
+}
+
+/// 慢速指令同時執行的上限。
+const MAX_CONCURRENT_SLOW_COMMANDS: usize = 4;
+/// 依序處理佇列的容量。
+const ORDERED_QUEUE_CAPACITY: usize = 64;
+/// 慢速指令同時執行數已滿時的回覆。
+const BUSY_REPLY: &str = "目前處理中的指令過多，請稍後再試";
+
+/// 需要瀏覽器或外部服務、可能超過數秒的指令（已先 defer）。
+fn is_slow_command(command: &str) -> bool {
+    matches!(command, "screenshot" | "points" | "refresh_now" | "check")
+}
+
+/// 依序處理佇列的工作。
+enum OrderedJob {
+    Handle(Box<Interaction>),
+    Busy(Box<Interaction>),
+}
+
+/// 依序處理非慢速指令（含設定變更）與忙碌回覆；接收迴圈結束（發送端釋放）後結束。
+async fn run_ordered_worker(core: Arc<BotCore>, mut jobs: tokio::sync::mpsc::Receiver<OrderedJob>) {
+    while let Some(job) = jobs.recv().await {
+        match job {
+            OrderedJob::Handle(interaction) => {
+                handle_interaction_logged(&core, &interaction).await;
+            }
+            OrderedJob::Busy(interaction) => {
+                if core.reply_busy(&interaction).await.is_err() {
+                    core.logger.warn("discord_gateway_message_failed", None);
+                }
+            }
+        }
+    }
+}
+
+/// 舊版 message listener 的 catch：處理失敗記 discord_gateway_message_failed。
+async fn handle_interaction_logged(core: &BotCore, interaction: &Interaction) {
+    if core.handle_interaction(interaction).await.is_err() {
+        core.logger.warn("discord_gateway_message_failed", None);
     }
 }
 
