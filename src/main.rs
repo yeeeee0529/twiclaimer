@@ -43,9 +43,8 @@ fn start_service() {
         }
     };
     let exit_code = runtime.block_on(twiclaimer::run_service());
-    // §7.9：程序結束前 flush stdout（logger 每行即時寫出，此處兜底）。
-    let mut stdout = std::io::stdout();
-    let _ = std::io::Write::flush(&mut stdout);
+    // §7.9：程序結束前 flush 日誌（寫入執行緒的佇列與 stdout；有上限，不會卡住結束）。
+    twiclaimer::flush_log_output();
     std::process::exit(exit_code);
 }
 

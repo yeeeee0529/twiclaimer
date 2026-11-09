@@ -15,6 +15,10 @@
 #![allow(dead_code)]
 
 use std::io::{self, Write};
+use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc::{self, SyncSender, TrySendError};
+use std::time::Duration;
 
 use time::OffsetDateTime;
 use time::UtcOffset;
@@ -136,20 +140,167 @@ pub(crate) trait LogWriter: Send + Sync {
     fn flush(&self) -> io::Result<()>;
 }
 
-/// 正式輸出端（舊版 `defaultOutput`）：寫到 stdout。
+/// stdout 寫入佇列的容量（行數）。
+const STDOUT_QUEUE_CAPACITY: usize = 1024;
+/// flush 等待寫入執行緒的上限；stdout 卡住時不讓結束流程跟著卡住。
+const STDOUT_FLUSH_TIMEOUT: Duration = Duration::from_secs(2);
+/// 佇列滿而丟棄日誌後補記的事件（Rust 版新增，不在舊版事件清單內）。
+const LOG_LINES_DROPPED_EVENT: &str = "log_lines_dropped";
+
+/// 寫入執行緒收到的訊息。
+enum StdoutMessage {
+    Line(String),
+    Flush(mpsc::Sender<io::Result<()>>),
+}
+
+/// 所有 [`StdoutWriter`] 共用的寫入執行緒與有界佇列（保持各 logger 之間的行序）。
+struct StdoutPipe {
+    sender: SyncSender<StdoutMessage>,
+    /// 佇列滿而丟棄、尚未補記的行數。
+    dropped: AtomicU64,
+}
+
+impl StdoutPipe {
+    fn shared() -> &'static StdoutPipe {
+        static PIPE: OnceLock<StdoutPipe> = OnceLock::new();
+        PIPE.get_or_init(|| {
+            let (sender, receiver) = mpsc::sync_channel(STDOUT_QUEUE_CAPACITY);
+            let spawned = std::thread::Builder::new()
+                .name("log-writer".to_string())
+                .spawn(move || run_stdout_writer(receiver));
+            if let Err(error) = spawned {
+                panic!("failed to spawn the log writer thread: {error}");
+            }
+            StdoutPipe {
+                sender,
+                dropped: AtomicU64::new(0),
+            }
+        })
+    }
+
+    /// 非阻塞送出一行；佇列滿時丟棄並計數，佇列恢復後先補記丟棄數量。
+    fn send_line(&self, line: String) {
+        let dropped = self.dropped.swap(0, Ordering::Relaxed);
+        if dropped > 0 {
+            let notice = dropped_notice_line(dropped);
+            if self.sender.try_send(StdoutMessage::Line(notice)).is_err() {
+                // 仍然滿：把這次的數量加回去，連同本行一起計入。
+                self.dropped.fetch_add(dropped + 1, Ordering::Relaxed);
+                return;
+            }
+        }
+        match self.sender.try_send(StdoutMessage::Line(line)) {
+            Ok(()) => {}
+            Err(TrySendError::Full(_)) => {
+                self.dropped.fetch_add(1, Ordering::Relaxed);
+            }
+            // 寫入執行緒已結束（程序收尾中）：沒有地方可寫，靜默丟棄。
+            Err(TrySendError::Disconnected(_)) => {}
+        }
+    }
+
+    /// 等寫入執行緒把佇列內的行寫完並 flush stdout；逾時回報錯誤。
+    fn flush(&self) -> io::Result<()> {
+        let (reply_tx, reply_rx) = mpsc::channel();
+        send_with_timeout(
+            &self.sender,
+            StdoutMessage::Flush(reply_tx),
+            STDOUT_FLUSH_TIMEOUT,
+        )?;
+        match reply_rx.recv_timeout(STDOUT_FLUSH_TIMEOUT) {
+            Ok(result) => result,
+            Err(_) => Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "stdout flush timed out",
+            )),
+        }
+    }
+}
+
+/// `SyncSender` 沒有帶逾時的 send：以 try_send 加短暫重試，避免 flush 卡在滿佇列上。
+fn send_with_timeout(
+    sender: &SyncSender<StdoutMessage>,
+    mut message: StdoutMessage,
+    timeout: Duration,
+) -> io::Result<()> {
+    let deadline = std::time::Instant::now() + timeout;
+    loop {
+        match sender.try_send(message) {
+            Ok(()) => return Ok(()),
+            Err(TrySendError::Disconnected(_)) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::BrokenPipe,
+                    "log writer thread stopped",
+                ));
+            }
+            Err(TrySendError::Full(returned)) => {
+                if std::time::Instant::now() >= deadline {
+                    return Err(io::Error::new(
+                        io::ErrorKind::TimedOut,
+                        "stdout flush timed out",
+                    ));
+                }
+                message = returned;
+                std::thread::sleep(Duration::from_millis(5));
+            }
+        }
+    }
+}
+
+/// 寫入執行緒本體：依序寫出每一行；寫入錯誤照舊版忽略，flush 時回報。
+fn run_stdout_writer(receiver: mpsc::Receiver<StdoutMessage>) {
+    let stdout = io::stdout();
+    while let Ok(message) = receiver.recv() {
+        match message {
+            StdoutMessage::Line(line) => {
+                let _ = stdout.lock().write_all(line.as_bytes());
+            }
+            StdoutMessage::Flush(reply) => {
+                let _ = reply.send(stdout.lock().flush());
+            }
+        }
+    }
+}
+
+/// 丟棄通知的一行 JSON（格式與一般日誌相同）。
+fn dropped_notice_line(count: u64) -> String {
+    let record = SanitizedValue::Object(vec![
+        (
+            "level".to_string(),
+            SanitizedValue::String("warn".to_string()),
+        ),
+        (
+            "event".to_string(),
+            SanitizedValue::String(LOG_LINES_DROPPED_EVENT.to_string()),
+        ),
+        (
+            "time".to_string(),
+            SanitizedValue::String(to_iso_string(OffsetDateTime::now_utc())),
+        ),
+        ("count".to_string(), SanitizedValue::Number(count as f64)),
+    ]);
+    let mut line = record.to_json_string();
+    line.push('\n');
+    line
+}
+
+/// 正式輸出端（舊版 `defaultOutput`）：交給專用寫入執行緒寫到 stdout。
+///
+/// 呼叫端不會被 stdout 阻塞：寫入在背景執行緒進行，佇列（[`STDOUT_QUEUE_CAPACITY`]
+/// 行）滿時丟棄新行並計數，恢復後補記一筆 `log_lines_dropped`。
 pub(crate) struct StdoutWriter;
 
 impl LogWriter for StdoutWriter {
     fn write_line(&self, line: &str) {
         // 舊版 `process.stdout.write(line)` 不帶 callback、不處理寫入錯誤；
-        // 這裡同樣忽略寫入錯誤（fire-and-forget），flush 時才回報。
-        let _ = io::stdout().lock().write_all(line.as_bytes());
+        // 這裡同樣 fire-and-forget，flush 時才回報。
+        StdoutPipe::shared().send_line(line.to_string());
     }
 
     fn flush(&self) -> io::Result<()> {
-        // 舊版 flush 等待 stdout 的寫入 callback；這裡把 LineWriter 的緩衝區
-        // 推到底層並等到寫完（每行本來就以換行結尾，實際幾乎沒有殘留）。
-        io::stdout().lock().flush()
+        // 舊版 flush 等待 stdout 的寫入 callback；這裡等寫入執行緒寫完佇列並
+        // flush stdout，最多等 [`STDOUT_FLUSH_TIMEOUT`]。
+        StdoutPipe::shared().flush()
     }
 }
 

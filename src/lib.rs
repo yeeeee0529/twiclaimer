@@ -23,6 +23,13 @@ use crate::app::runner::AppRunner;
 use crate::browser::cdp::launcher::kill_all_registered;
 use crate::logging::logger::{JsonLineLoggerOptions, LogLevel, create_logger};
 
+/// 程序結束前把日誌寫入執行緒佇列內的行寫完並 flush stdout（§7.9）。
+/// 最多等 2 秒：stdout 卡住時不阻塞程序結束。
+pub fn flush_log_output() {
+    use crate::logging::logger::{LogWriter, StdoutWriter};
+    let _ = StdoutWriter.flush();
+}
+
 /// `probe` 子命令的進入點（bin 的公開面；實作在 `browser::cdp::probe`，§7.3.7。
 /// DEC-014 的收尾：bin 不再以 `#[path]` 掛載模組樹，改呼叫 lib 的公開 API）。
 pub async fn run_probe(args: &[String]) -> Result<(), String> {

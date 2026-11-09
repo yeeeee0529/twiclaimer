@@ -406,3 +406,49 @@ fn error_field_output_has_no_stack() {
     );
     assert!(!lines[0].contains("stack"));
 }
+
+// 回歸測試：stdout 卡住（佇列不再被消化）時寫日誌不會阻塞；滿了丟棄並計數，
+// 佇列恢復後先補記一筆 log_lines_dropped（帶丟棄數量），再寫新的行。
+#[test]
+fn stdout_pipe_drops_when_full_and_reports_count_after_recovery() {
+    use std::sync::atomic::AtomicU64;
+    use std::sync::mpsc;
+
+    use super::{StdoutMessage, StdoutPipe};
+
+    let (sender, receiver) = mpsc::sync_channel(2);
+    let pipe = StdoutPipe {
+        sender,
+        dropped: AtomicU64::new(0),
+    };
+    for index in 0..5 {
+        pipe.send_line(format!("line-{index}\n"));
+    }
+    assert_eq!(pipe.dropped.load(std::sync::atomic::Ordering::Relaxed), 3);
+
+    // 消化佇列（模擬 stdout 恢復）。
+    let drained: Vec<String> = receiver
+        .try_iter()
+        .map(|message| match message {
+            StdoutMessage::Line(line) => line,
+            StdoutMessage::Flush(_) => panic!("unexpected flush"),
+        })
+        .collect();
+    assert_eq!(drained, vec!["line-0\n", "line-1\n"]);
+
+    pipe.send_line("line-5\n".to_string());
+    let lines: Vec<String> = receiver
+        .try_iter()
+        .map(|message| match message {
+            StdoutMessage::Line(line) => line,
+            StdoutMessage::Flush(_) => panic!("unexpected flush"),
+        })
+        .collect();
+    assert_eq!(lines.len(), 2);
+    let notice: serde_json::Value = serde_json::from_str(lines[0].trim_end()).unwrap();
+    assert_eq!(notice["level"], "warn");
+    assert_eq!(notice["event"], "log_lines_dropped");
+    assert_eq!(notice["count"], 3);
+    assert_eq!(lines[1], "line-5\n");
+    assert_eq!(pipe.dropped.load(std::sync::atomic::Ordering::Relaxed), 0);
+}
